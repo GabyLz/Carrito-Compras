@@ -26,11 +26,14 @@ app.use(
 
       const normalizedOrigin = origin.toLowerCase();
       const allowedExact = new Set([config.frontendUrl.toLowerCase()]);
+      const isVercelOrigin =
+        normalizedOrigin.startsWith('https://') && normalizedOrigin.includes('.vercel.app');
 
       const isLocalDevOrigin =
         normalizedOrigin.startsWith('http://localhost:') || normalizedOrigin.startsWith('http://127.0.0.1:');
 
       if (config.nodeEnv !== 'production' && isLocalDevOrigin) return callback(null, true);
+      if (isVercelOrigin) return callback(null, true);
       if (allowedExact.has(normalizedOrigin)) return callback(null, true);
 
       return callback(new Error(`CORS bloqueado para el origen: ${origin}`));
