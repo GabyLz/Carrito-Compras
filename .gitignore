@@ -6,9 +6,10 @@ frontend/node_modules/
 # Environment variables
 .env
 .env.*
-!.env.example
 backend/.env
 frontend/.env
+!.env.example
+!backend/.env.example
 
 # Build artifacts
 dist/
@@ -29,3 +30,4 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+documentacion/~$*.docx
