@@ -1,5 +1,6 @@
-import puppeteer from 'puppeteer';
 import { Request, Response } from 'express';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import prisma from '../lib/prisma';
 
 const safeText = (value: unknown) =>
@@ -49,22 +50,24 @@ const baseStyles = `
   .dot { width: 9px; height: 9px; border-radius: 999px; }
 `;
 
+const getBrowserLaunchOptions = async () => {
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || (await chromium.executablePath());
+
+  return {
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath,
+    headless: chromium.headless,
+    ignoreHTTPSErrors: true,
+  };
+};
+
 const renderHtmlToPdf = async (res: Response, htmlContent: string, filename: string) => {
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
   try {
     browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--font-render-hinting=none',
-        '--disable-extensions',
-        '--disable-features=IsolateOrigins,site-per-process',
-      ],
+      ...(await getBrowserLaunchOptions()),
       timeout: 120000,
-      ...(process.env.PUPPETEER_EXECUTABLE_PATH ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH } : {}),
     });
 
     const page = await browser.newPage();

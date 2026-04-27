@@ -5,6 +5,8 @@ import api from '../../services/api';
 
 type Categoria = { id: number; nombre: string; activo?: boolean };
 
+const reportesApiBase = import.meta.env.VITE_API_URL || 'https://carrito-compras-gppn.onrender.com/api/v1';
+
 const Reportes = () => {
   const token = useAuthStore((state) => state.accessToken);
   const [loading, setLoading] = useState<string | null>(null);
@@ -26,7 +28,7 @@ const Reportes = () => {
   const descargarPdf = async (endpoint: string, filename: string) => {
     try {
       setLoading(filename);
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}${endpoint}`, {
+      const response = await fetch(`${reportesApiBase}${endpoint}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
 
