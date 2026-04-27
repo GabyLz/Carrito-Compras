@@ -1,132 +1,199 @@
 import { Request, Response } from 'express';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
 import PDFDocument from 'pdfkit';
 import prisma from '../lib/prisma';
 
-const safeText = (value: unknown) =>
-  String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-const baseStyles = `
-  @page { margin: 20px; }
-  body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; color: #1e293b; background: #ffffff; margin: 0; padding: 20px; font-size: 11px; }
-  .header { background: #0f172a; color: white; padding: 30px; border-radius: 12px; margin-bottom: 25px; position: relative; overflow: hidden; }
-  .header::after { content: ''; position: absolute; top: 0; right: 0; width: 300px; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05)); transform: skewX(-20deg); }
-  .header h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em; }
-  .header p { margin: 5px 0 0; color: #94a3b8; font-size: 13px; }
-  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
-  .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 10px; }
-  .kpi-label { color: #64748b; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-  .kpi-value { font-size: 18px; font-weight: 700; color: #0f172a; margin-top: 4px; }
-  .section { margin-bottom: 30px; }
-  .section-title { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-  .section-title::before { content: ''; width: 4px; height: 16px; background: #3b82f6; border-radius: 2px; }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #f1f5f9; color: #475569; font-weight: 600; text-align: left; padding: 8px 10px; font-size: 9px; text-transform: uppercase; }
-  td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
-  .text-right { text-align: right; }
-  .font-bold { font-weight: 700; }
-  .success { color: #059669; }
-  .danger { color: #dc2626; }
-  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 9px; text-align: center; }
-  .inventory-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-  .chart-wrap { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
-  .chart-title { font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
-  .bar-row { display: grid; grid-template-columns: 115px 1fr 36px; gap: 8px; align-items: center; margin-bottom: 7px; }
-  .bar-label { font-size: 9px; color: #334155; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .bar-track { height: 12px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
-  .bar-fill { height: 12px; border-radius: 999px; background: linear-gradient(90deg, #06b6d4, #0284c7); }
-  .bar-value { text-align: right; font-size: 9px; color: #334155; font-weight: 700; }
-  .pie-wrap { display: flex; align-items: center; gap: 14px; }
-  .pie-chart { width: 120px; height: 120px; border-radius: 999px; }
-  .pie-legend { display: grid; gap: 6px; flex: 1; }
-  .legend-item { display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: #334155; }
-  .legend-left { display: flex; align-items: center; gap: 6px; }
-  .dot { width: 9px; height: 9px; border-radius: 999px; }
-`;
-
-const getBrowserLaunchOptions = async () => {
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || (await chromium.executablePath());
-
-  return {
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    executablePath,
-    headless: chromium.headless,
-    ignoreHTTPSErrors: true,
-  };
+type ProductLowStock = {
+  nombre: string;
+  stock_general: number;
+  stock_minimo: number;
+  categoria?: { nombre?: string | null } | null;
 };
 
-const sendFallbackPdf = (res: Response, filename: string, title: string, lines: string[]) => {
-  const doc = new PDFDocument({ margin: 40, size: 'A4' });
+type ReportKpi = {
+  ventasNetas: number;
+  ticketPromedio: number;
+  conversionMes: number;
+  carritosActivos: number;
+};
+
+const safeText = (value: unknown) => String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+
+const setPdfHeaders = (res: Response, filename: string) => {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+};
+
+const createPdfDoc = (res: Response, filename: string) => {
+  setPdfHeaders(res, filename);
+  const doc = new PDFDocument({ margin: 40, size: 'A4' });
   doc.pipe(res);
+  return doc;
+};
 
-  doc.rect(0, 0, doc.page.width, 72).fill('#0f172a');
-  doc.fillColor('#ffffff').fontSize(20).text('Commerce Suite', 40, 24);
-  doc.fillColor('#0f172a').fontSize(16).text(title, 40, 96);
-  doc.moveDown(1);
-
-  lines.forEach((line) => {
-    doc.fontSize(10).fillColor('#334155').text(line, { lineGap: 4 });
-  });
-
-  doc.moveDown(2);
-  doc.fontSize(9).fillColor('#64748b').text(`Generado: ${new Date().toLocaleString()}`);
+const finishPdf = (doc: PDFDocument) => {
   doc.end();
 };
 
-const renderHtmlToPdf = async (res: Response, htmlContent: string, filename: string) => {
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
-  try {
-    browser = await puppeteer.launch({
-      ...(await getBrowserLaunchOptions()),
-      timeout: 120000,
-    });
+const writeHeader = (doc: PDFDocument, title: string, subtitle: string) => {
+  doc.rect(0, 0, doc.page.width, 72).fill('#0f172a');
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(20).text('Commerce Suite', 40, 24);
+  doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(16).text(title, 40, 96);
+  doc.font('Helvetica').fillColor('#475569').fontSize(10).text(subtitle, 40, 118);
+  doc.moveDown(1.5);
+};
 
-    const page = await browser.newPage();
-    await page.setDefaultNavigationTimeout(90000);
-    await page.setDefaultTimeout(90000);
-    await page.setViewport({ width: 1200, height: 1600 });
-    await page.setContent(htmlContent, { waitUntil: 'domcontentloaded', timeout: 60000 });
+const writeSectionTitle = (doc: PDFDocument, title: string) => {
+  doc.moveDown(0.5);
+  doc.font('Helvetica-Bold').fillColor('#0f172a').fontSize(13).text(title);
+  doc.moveDown(0.3);
+};
 
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
-      preferCSSPageSize: true,
-      timeout: 120000,
-    });
-
-    await page.close().catch(() => undefined);
-    await browser.close().catch(() => undefined);
-    browser = null;
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-    res.send(pdfBuffer);
-  } catch (error: any) {
-    if (browser) {
-      await browser.close().catch(() => undefined);
-    }
-    sendFallbackPdf(
-      res,
-      filename,
-      'Reporte de gestión',
-      [
-        'La version HTML avanzada no pudo generarse en este entorno.',
-        `Detalle tecnico: ${error?.message || 'Error interno del servidor'}`,
-        'Se genero una version alternativa para mantener la descarga disponible.',
-      ]
-    );
+const ensureSpace = (doc: PDFDocument, currentY: number, needed = 90) => {
+  if (currentY > doc.page.height - needed) {
+    doc.addPage();
+    return 40;
   }
+  return currentY;
+};
+
+const drawTableHeader = (doc: PDFDocument, y: number, headers: string[], widths: number[]) => {
+  const x = 40;
+  doc.rect(x, y, 540, 20).fill('#f1f5f9');
+  doc.fillColor('#475569').font('Helvetica-Bold').fontSize(10);
+  let cursor = x + 5;
+  headers.forEach((header, index) => {
+    doc.text(header, cursor, y + 5);
+    cursor += widths[index];
+  });
+  return y + 25;
+};
+
+const drawKpiCard = (doc: PDFDocument, x: number, y: number, width: number, label: string, value: string, tone = '#f8fafc') => {
+  doc.roundedRect(x, y, width, 70, 10).fillAndStroke(tone, '#e2e8f0');
+  doc.fillColor('#64748b').font('Helvetica').fontSize(9).text(label.toUpperCase(), x + 12, y + 12, { width: width - 24 });
+  doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(15).text(value, x + 12, y + 32, { width: width - 24 });
+  doc.font('Helvetica');
+};
+
+const drawValueRow = (doc: PDFDocument, y: number, label: string, value: string, danger = false) => {
+  doc.fillColor('#334155').font('Helvetica').fontSize(10).text(label, 40, y, { width: 360 });
+  doc.fillColor(danger ? '#dc2626' : '#0f172a').font('Helvetica-Bold').text(value, 420, y, { width: 160, align: 'right' });
+  doc.font('Helvetica');
+  return y + 20;
+};
+
+const writeLowStockSection = (doc: PDFDocument, products: ProductLowStock[]) => {
+  writeSectionTitle(doc, 'Productos con bajo stock');
+
+  if (!products.length) {
+    doc.fillColor('#64748b').font('Helvetica').fontSize(10).text('No hay productos con bajo stock.');
+    return;
+  }
+
+  let y = drawTableHeader(doc, doc.y + 6, ['Producto', 'Categoría', 'Stock Actual', 'Stock Mínimo'], [230, 150, 80, 80]);
+  products.slice(0, 100).forEach((product, index) => {
+    y = ensureSpace(doc, y, 110);
+    if (index % 2 === 0) {
+      doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+    }
+
+    doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+    doc.text(safeText(product.nombre), 45, y, { width: 220 });
+    doc.text(safeText(product.categoria?.nombre || '-'), 275, y, { width: 140 });
+    doc.fillColor(product.stock_general <= 0 ? '#dc2626' : '#f59e0b').font('Helvetica-Bold').text(String(Number(product.stock_general || 0)), 425, y, { width: 70, align: 'right' });
+    doc.fillColor('#1e293b').font('Helvetica').text(String(Number(product.stock_minimo || 0)), 505, y, { width: 70, align: 'right' });
+    y += 25;
+  });
+};
+
+const buildManagementPdf = (
+  res: Response,
+  filename: string,
+  title: string,
+  subtitle: string,
+  kpi: ReportKpi,
+  rentabilidadProductos: Array<{ nombre: string; unidades: number; ingresos: number; costos: number; utilidad: number }>,
+  clientesStats: { nuevos: number; recurrentes: number; inactivos: number; vip: number },
+  rotacionInventario: Array<{ nombre: string; ventas_30d: number; stock_actual: number; indice_rotacion: number }>,
+  ingresosCostos: Array<{ mes: string; ingresos: number; costos: number }>,
+  bajoStock: ProductLowStock[]
+) => {
+  const doc = createPdfDoc(res, filename);
+  writeHeader(doc, title, subtitle);
+
+  drawKpiCard(doc, 40, 150, 120, 'Ventas netas', `S/ ${kpi.ventasNetas.toLocaleString('es-PE')}`);
+  drawKpiCard(doc, 170, 150, 120, 'Ticket promedio', `S/ ${kpi.ticketPromedio.toLocaleString('es-PE')}`);
+  drawKpiCard(doc, 300, 150, 120, 'Conversión 30d', String(kpi.conversionMes));
+  drawKpiCard(doc, 430, 150, 150, 'Carritos activos', String(kpi.carritosActivos));
+
+  let y = 240;
+
+  writeSectionTitle(doc, 'Rentabilidad por producto');
+  y = drawTableHeader(doc, doc.y + 6, ['Producto', 'Unid.', 'Ingresos', 'Costos', 'Utilidad', 'Margen'], [190, 60, 95, 95, 95, 5]);
+  rentabilidadProductos.slice(0, 10).forEach((row, index) => {
+    y = ensureSpace(doc, y, 120);
+    if (index % 2 === 0) {
+      doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+    }
+    const margen = row.ingresos > 0 ? (row.utilidad / row.ingresos) * 100 : 0;
+    doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+    doc.text(safeText(row.nombre), 45, y, { width: 180 });
+    doc.text(String(row.unidades), 235, y, { width: 55, align: 'right' });
+    doc.text(`S/ ${row.ingresos.toLocaleString('es-PE')}`, 295, y, { width: 90, align: 'right' });
+    doc.text(`S/ ${row.costos.toLocaleString('es-PE')}`, 390, y, { width: 90, align: 'right' });
+    doc.fillColor('#059669').font('Helvetica-Bold').text(`S/ ${row.utilidad.toLocaleString('es-PE')}`, 485, y, { width: 70, align: 'right' });
+    doc.fillColor('#1e293b').font('Helvetica').text(`${margen.toFixed(1)}%`, 555, y, { width: 20, align: 'right' });
+    y += 25;
+  });
+
+  y = ensureSpace(doc, y + 10, 140);
+  writeSectionTitle(doc, 'Clientes');
+  y = drawValueRow(doc, doc.y + 6, 'Nuevos (30d)', String(clientesStats.nuevos));
+  y = drawValueRow(doc, y, 'Recurrentes', String(clientesStats.recurrentes));
+  y = drawValueRow(doc, y, 'Inactivos', String(clientesStats.inactivos));
+  y = drawValueRow(doc, y, 'VIP', String(clientesStats.vip));
+
+  y = ensureSpace(doc, y + 10, 180);
+  writeSectionTitle(doc, 'Rotación de inventario');
+  y = drawTableHeader(doc, doc.y + 6, ['Producto', 'Ventas 30d', 'Stock', 'Índice'], [250, 110, 90, 90]);
+  rotacionInventario.slice(0, 10).forEach((row, index) => {
+    y = ensureSpace(doc, y, 120);
+    if (index % 2 === 0) {
+      doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+    }
+    doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+    doc.text(safeText(row.nombre), 45, y, { width: 240 });
+    doc.text(String(row.ventas_30d), 305, y, { width: 80, align: 'right' });
+    doc.text(String(row.stock_actual), 395, y, { width: 70, align: 'right' });
+    doc.fillColor(row.indice_rotacion > 1 ? '#059669' : '#dc2626').font('Helvetica-Bold').text(String(row.indice_rotacion), 465, y, { width: 105, align: 'right' });
+    doc.font('Helvetica');
+    y += 25;
+  });
+
+  y = ensureSpace(doc, y + 10, 180);
+  writeSectionTitle(doc, 'Ingresos vs costos mensual');
+  y = drawTableHeader(doc, doc.y + 6, ['Mes', 'Ingresos', 'Costos', 'Utilidad'], [140, 120, 120, 160]);
+  ingresosCostos.slice(0, 6).forEach((row, index) => {
+    y = ensureSpace(doc, y, 120);
+    if (index % 2 === 0) {
+      doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+    }
+    const utilidad = row.ingresos - row.costos;
+    doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+    doc.text(row.mes, 45, y, { width: 120 });
+    doc.text(`S/ ${row.ingresos.toLocaleString('es-PE')}`, 185, y, { width: 100, align: 'right' });
+    doc.text(`S/ ${row.costos.toLocaleString('es-PE')}`, 305, y, { width: 100, align: 'right' });
+    doc.fillColor(utilidad >= 0 ? '#059669' : '#dc2626').font('Helvetica-Bold').text(`S/ ${utilidad.toLocaleString('es-PE')}`, 425, y, { width: 150, align: 'right' });
+    doc.font('Helvetica');
+    y += 25;
+  });
+
+  y = ensureSpace(doc, y + 10, 220);
+  writeLowStockSection(doc, bajoStock);
+
+  doc.moveDown(2);
+  doc.fontSize(9).fillColor('#64748b').text('Este informe es para uso exclusivo de la gerencia.');
+  finishPdf(doc);
 };
 
 export const generateManagementReport = async (_req: Request, res: Response) => {
@@ -198,138 +265,64 @@ export const generateManagementReport = async (_req: Request, res: Response) => 
       LIMIT 6
     `) as any[];
 
+    const bajoStock = await prisma.cat_productos.findMany({
+      where: { estado_producto: 'activo', stock_general: { lte: 10 } },
+      include: { categoria: true },
+      orderBy: [{ stock_general: 'asc' }, { nombre: 'asc' }],
+      take: 100,
+    });
+
     const reportDate = new Date().toLocaleDateString('es-ES');
-
-    const htmlContent = `
-      <html>
-        <head><style>${baseStyles}</style></head>
-        <body>
-          <div class="header">
-            <h1>Reporte de Gestión Analítica</h1>
-            <p>Análisis estratégico con visualizaciones avanzadas | ${reportDate}</p>
-          </div>
-
-          <div class="kpi-grid">
-            <div class="kpi-card"><div class="kpi-label">Ventas Netas</div><div class="kpi-value">S/ ${ventasNetas.toLocaleString('es-PE')}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Ticket Promedio</div><div class="kpi-value">S/ ${ticketPromedio.toLocaleString('es-PE')}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Conversión (30d)</div><div class="kpi-value">${Number(carritosStats[0]?.conversion_mes || 0)}</div></div>
-            <div class="kpi-card"><div class="kpi-label">Carts Activos</div><div class="kpi-value">${Number(carritosStats[0]?.activos || 0)}</div></div>
-          </div>
-
-          <div class="section">
-            <h2 class="section-title">Rentabilidad por Producto (Top 10)</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th class="text-right">Unidades</th>
-                  <th class="text-right">Ingresos</th>
-                  <th class="text-right">Costos</th>
-                  <th class="text-right">Utilidad</th>
-                  <th class="text-right">Margen</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rentabilidadProductos.map((p) => {
-                  const margen = Number(p.ingresos) > 0 ? (Number(p.utilidad) / Number(p.ingresos)) * 100 : 0;
-                  return `
-                    <tr>
-                      <td class="font-bold">${safeText(p.nombre)}</td>
-                      <td class="text-right">${Number(p.unidades)}</td>
-                      <td class="text-right">S/ ${Number(p.ingresos).toLocaleString()}</td>
-                      <td class="text-right">S/ ${Number(p.costos).toLocaleString()}</td>
-                      <td class="text-right success font-bold">S/ ${Number(p.utilidad).toLocaleString()}</td>
-                      <td class="text-right">${margen.toFixed(1)}%</td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="grid-2">
-            <div class="section">
-              <h2 class="section-title">Clientes nuevos/recurrentes/inactivos/VIP</h2>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                <div class="kpi-card"><div class="kpi-label">Nuevos (30d)</div><div class="kpi-value">${Number(clientesStats[0]?.nuevos || 0)}</div></div>
-                <div class="kpi-card"><div class="kpi-label">Recurrentes</div><div class="kpi-value">${Number(clientesStats[0]?.recurrentes || 0)}</div></div>
-                <div class="kpi-card"><div class="kpi-label">Inactivos</div><div class="kpi-value">${Number(clientesStats[0]?.inactivos || 0)}</div></div>
-                <div class="kpi-card" style="background: #eff6ff;"><div class="kpi-label" style="color: #2563eb;">VIP</div><div class="kpi-value" style="color: #1d4ed8;">${Number(clientesStats[0]?.vip || 0)}</div></div>
-              </div>
-            </div>
-
-            <div class="section">
-              <h2 class="section-title">Rotación de Inventario</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th class="text-right">Ventas 30d</th>
-                    <th class="text-right">Stock</th>
-                    <th class="text-right">Índice</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rotacionInventario.map((r) => `
-                    <tr>
-                      <td>${safeText(r.nombre)}</td>
-                      <td class="text-right">${Number(r.ventas_30d)}</td>
-                      <td class="text-right">${Number(r.stock_actual)}</td>
-                      <td class="text-right font-bold ${Number(r.indice_rotacion) > 1 ? 'success' : ''}">${r.indice_rotacion}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="section">
-            <h2 class="section-title">Ingresos vs costos mensual</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Mes</th>
-                  <th class="text-right">Ingresos</th>
-                  <th class="text-right">Costos</th>
-                  <th class="text-right">Utilidad Bruta</th>
-                  <th class="text-right">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${ingresosCostos.map((i) => {
-                  const utilidad = Number(i.ingresos) - Number(i.costos);
-                  return `
-                    <tr>
-                      <td class="font-bold">${i.mes}</td>
-                      <td class="text-right">S/ ${Number(i.ingresos).toLocaleString()}</td>
-                      <td class="text-right">S/ ${Number(i.costos).toLocaleString()}</td>
-                      <td class="text-right font-bold ${utilidad >= 0 ? 'success' : 'danger'}">S/ ${utilidad.toLocaleString()}</td>
-                      <td class="text-right">${utilidad >= 0 ? '▲ Rentable' : '▼ Pérdida'}</td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="footer">Este informe es para uso exclusivo de la gerencia. Datos generados dinámicamente desde el motor analítico del sistema.</div>
-        </body>
-      </html>
-    `;
-
-    const fileDate = reportDate.replace(/\//g, '-');
-    await renderHtmlToPdf(res, htmlContent, `reporte-gestion-${fileDate}.pdf`);
-  } catch (error: any) {
-    sendFallbackPdf(
+    buildManagementPdf(
       res,
-      `reporte-gestion-error-${Date.now()}.pdf`,
+      `reporte-gestion-${reportDate.replace(/\//g, '-')}.pdf`,
       'Reporte de gestión',
-      [
-        'No se pudo generar la version avanzada de este reporte.',
-        `Detalle tecnico: ${error?.message || 'Error interno del servidor'}`,
-        'Se entrego una version basica para que la descarga siga funcionando.',
-      ]
+      `Análisis estratégico | ${reportDate}`,
+      {
+        ventasNetas,
+        ticketPromedio,
+        conversionMes: Number(carritosStats[0]?.conversion_mes || 0),
+        carritosActivos: Number(carritosStats[0]?.activos || 0),
+      },
+      rentabilidadProductos.map((p: any) => ({
+        nombre: String(p.nombre),
+        unidades: Number(p.unidades || 0),
+        ingresos: Number(p.ingresos || 0),
+        costos: Number(p.costos || 0),
+        utilidad: Number(p.utilidad || 0),
+      })),
+      {
+        nuevos: Number(clientesStats[0]?.nuevos || 0),
+        recurrentes: Number(clientesStats[0]?.recurrentes || 0),
+        inactivos: Number(clientesStats[0]?.inactivos || 0),
+        vip: Number(clientesStats[0]?.vip || 0),
+      },
+      rotacionInventario.map((r: any) => ({
+        nombre: String(r.nombre),
+        ventas_30d: Number(r.ventas_30d || 0),
+        stock_actual: Number(r.stock_actual || 0),
+        indice_rotacion: Number(r.indice_rotacion || 0),
+      })),
+      ingresosCostos.map((i: any) => ({
+        mes: String(i.mes),
+        ingresos: Number(i.ingresos || 0),
+        costos: Number(i.costos || 0),
+      })),
+      bajoStock.map((p) => ({
+        nombre: p.nombre,
+        stock_general: Number(p.stock_general || 0),
+        stock_minimo: Number(p.stock_minimo || 0),
+        categoria: p.categoria,
+      }))
     );
+  } catch (error: any) {
+    if (!res.headersSent) {
+      const doc = createPdfDoc(res, `reporte-gestion-error-${Date.now()}.pdf`);
+      writeHeader(doc, 'Reporte de gestión', 'Se generó una versión básica de respaldo');
+      doc.font('Helvetica').fontSize(10).fillColor('#334155').text('No se pudo generar la versión avanzada del reporte.');
+      doc.text(`Detalle técnico: ${error?.message || 'Error interno del servidor'}`);
+      finishPdf(doc);
+    }
   }
 };
 
@@ -399,141 +392,80 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
 
     const inv = inventoryKpis[0] || { total_productos: 0, valor_total: 0, bajo_stock: 0 };
     const masValioso = productoMasValioso[0] || { sku: '-', nombre: 'Sin datos', valor_total: 0 };
-    const totalDistribucion =
-      distribucionStock.reduce((acc: number, cur: { total: number }) => acc + Number(cur.total || 0), 0) || 1;
-    const maxCategoria = Math.max(...topCategoriasInventario.map((x: { total: number }) => Number(x.total || 0)), 1);
-
-    const piePalette: Record<string, string> = {
-      'Stock OK': '#0ea5a4',
-      'Bajo stock': '#f59e0b',
-      'Sin stock': '#ef4444',
-    };
-
-    let accum = 0;
-    const pieGradient = distribucionStock
-      .map((item: { nombre: string; total: number }) => {
-        const ratio = (Number(item.total || 0) / totalDistribucion) * 100;
-        const start = accum;
-        const end = accum + ratio;
-        accum = end;
-        const color = piePalette[item.nombre] || '#64748b';
-        return `${color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
-      })
-      .join(', ');
-
     const reportDate = new Date().toLocaleDateString('es-ES');
 
-    const htmlContent = `
-      <html>
-        <head><style>${baseStyles}</style></head>
-        <body>
-          <div class="header">
-            <h1>Reporte de Gestión de Inventario</h1>
-            <p>Análisis de Inventario y Bajo Stock | ${reportDate}</p>
-          </div>
+    const doc = createPdfDoc(res, `reporte-gestion-inventario-${reportDate.replace(/\//g, '-')}.pdf`);
+    writeHeader(doc, 'Reporte de gestión de inventario', `Análisis de inventario y bajo stock | ${reportDate}`);
 
-          <div class="section">
-            <h2 class="section-title">Análisis de Inventario y Bajo Stock</h2>
-            <div class="inventory-grid">
-              <div class="kpi-card"><div class="kpi-label">Productos únicos</div><div class="kpi-value">${Number(inv.total_productos || 0)}</div></div>
-              <div class="kpi-card"><div class="kpi-label">Valor inventario</div><div class="kpi-value">S/ ${Number(inv.valor_total || 0).toLocaleString('es-PE')}</div></div>
-              <div class="kpi-card"><div class="kpi-label">Bajo stock</div><div class="kpi-value">${Number(inv.bajo_stock || 0)}</div></div>
-              <div class="kpi-card"><div class="kpi-label">Producto más valioso</div><div class="kpi-value" style="font-size: 12px; line-height: 1.2;">${safeText(masValioso.nombre)}<br/><span style="font-size:10px;color:#64748b">S/ ${Number(masValioso.valor_total || 0).toLocaleString('es-PE')}</span></div></div>
-            </div>
+    drawKpiCard(doc, 40, 150, 120, 'Productos únicos', String(Number(inv.total_productos || 0)));
+    drawKpiCard(doc, 170, 150, 120, 'Valor inventario', `S/ ${Number(inv.valor_total || 0).toLocaleString('es-PE')}`);
+    drawKpiCard(doc, 300, 150, 120, 'Bajo stock', String(Number(inv.bajo_stock || 0)));
+    drawKpiCard(doc, 430, 150, 150, 'Producto más valioso', safeText(masValioso.nombre));
 
-            <div class="grid-2">
-              <div class="chart-wrap">
-                <div class="chart-title">Top 10 categorías con más productos</div>
-                ${topCategoriasInventario.map((row: { nombre: string; total: number }) => {
-                  const width = Math.max((Number(row.total || 0) / maxCategoria) * 100, 2);
-                  return `
-                    <div class="bar-row">
-                      <div class="bar-label">${safeText(row.nombre)}</div>
-                      <div class="bar-track"><div class="bar-fill" style="width:${width.toFixed(2)}%"></div></div>
-                      <div class="bar-value">${Number(row.total || 0)}</div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
+    let y = 245;
+    writeSectionTitle(doc, 'Top 10 categorías con más productos');
+    y = drawTableHeader(doc, doc.y + 6, ['Categoría', 'Total', 'Observación'], [230, 70, 240]);
+    const maxCategoria = Math.max(...topCategoriasInventario.map((x: { total: number }) => Number(x.total || 0)), 1);
+    topCategoriasInventario.slice(0, 10).forEach((row, index) => {
+      y = ensureSpace(doc, y, 120);
+      if (index % 2 === 0) {
+        doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+      }
+      const progress = Math.max((Number(row.total || 0) / maxCategoria) * 100, 2);
+      doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+      doc.text(safeText(row.nombre), 45, y, { width: 220 });
+      doc.text(String(Number(row.total || 0)), 285, y, { width: 60, align: 'right' });
+      doc.rect(360, y + 4, 190, 10).fill('#e2e8f0');
+      doc.rect(360, y + 4, Math.max((190 * progress) / 100, 4), 10).fill('#0ea5a4');
+      y += 25;
+    });
 
-              <div class="chart-wrap">
-                <div class="chart-title">Distribución del estado de stock</div>
-                <div class="pie-wrap">
-                  <div class="pie-chart" style="background: conic-gradient(${pieGradient || '#cbd5e1 0% 100%'});"></div>
-                  <div class="pie-legend">
-                    ${distribucionStock.map((row: { nombre: string; total: number }) => `
-                      <div class="legend-item">
-                        <div class="legend-left">
-                          <span class="dot" style="background:${piePalette[row.nombre] || '#64748b'}"></span>
-                          <span>${safeText(row.nombre)}</span>
-                        </div>
-                        <span>${Number(row.total || 0)}</span>
-                      </div>
-                    `).join('')}
-                  </div>
-                </div>
-              </div>
-            </div>
+    y = ensureSpace(doc, y + 10, 160);
+    writeSectionTitle(doc, 'Distribución del estado de stock');
+    y = drawTableHeader(doc, doc.y + 6, ['Estado', 'Total', 'Nota'], [170, 80, 290]);
+    distribucionStock.forEach((row, index) => {
+      y = ensureSpace(doc, y, 120);
+      if (index % 2 === 0) {
+        doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+      }
+      const note = row.nombre === 'Sin stock' ? 'Atención inmediata' : row.nombre === 'Bajo stock' ? 'Revisar reposición' : 'Correcto';
+      doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+      doc.text(safeText(row.nombre), 45, y, { width: 160 });
+      doc.text(String(Number(row.total || 0)), 230, y, { width: 70, align: 'right' });
+      doc.fillColor(row.nombre === 'Sin stock' ? '#dc2626' : row.nombre === 'Bajo stock' ? '#f59e0b' : '#059669').font('Helvetica-Bold').text(note, 320, y, { width: 230 });
+      doc.font('Helvetica');
+      y += 25;
+    });
 
-            <div style="margin-top:16px;">
-              <div class="chart-title">Listado de productos que necesitan reordenar</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>SKU</th>
-                    <th>Producto</th>
-                    <th>Categoría</th>
-                    <th class="text-right">Stock Actual</th>
-                    <th class="text-right">Stock Mínimo</th>
-                    <th class="text-right">Faltante</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${reorderList.length === 0
-                    ? '<tr><td colspan="6" style="text-align:center;color:#64748b;">No hay productos para reordenar.</td></tr>'
-                    : reorderList
-                        .map(
-                          (row: {
-                            sku: string | null;
-                            nombre: string;
-                            categoria: string;
-                            stock_actual: number;
-                            stock_minimo: number;
-                            faltante: number;
-                          }) => `
-                    <tr>
-                      <td>${safeText(row.sku || '-')}</td>
-                      <td class="font-bold">${safeText(row.nombre)}</td>
-                      <td>${safeText(row.categoria)}</td>
-                      <td class="text-right">${Number(row.stock_actual || 0)}</td>
-                      <td class="text-right">${Number(row.stock_minimo || 0)}</td>
-                      <td class="text-right danger font-bold">${Number(row.faltante || 0)}</td>
-                    </tr>
-                  `
-                        )
-                        .join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
+    y = ensureSpace(doc, y + 10, 220);
+    writeSectionTitle(doc, 'Listado de productos que necesitan reordenar');
+    y = drawTableHeader(doc, doc.y + 6, ['SKU', 'Producto', 'Categoría', 'Stock Actual', 'Stock Mínimo', 'Faltante'], [80, 170, 120, 65, 65, 40]);
+    reorderList.forEach((row, index) => {
+      y = ensureSpace(doc, y, 110);
+      if (index % 2 === 0) {
+        doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+      }
+      doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+      doc.text(safeText(row.sku || '-'), 45, y, { width: 70 });
+      doc.text(safeText(row.nombre), 125, y, { width: 165 });
+      doc.text(safeText(row.categoria), 300, y, { width: 115 });
+      doc.text(String(Number(row.stock_actual || 0)), 425, y, { width: 55, align: 'right' });
+      doc.text(String(Number(row.stock_minimo || 0)), 485, y, { width: 55, align: 'right' });
+      doc.fillColor('#dc2626').font('Helvetica-Bold').text(String(Number(row.faltante || 0)), 540, y, { width: 40, align: 'right' });
+      doc.font('Helvetica');
+      y += 25;
+    });
 
-          <div class="footer">Este informe es para uso exclusivo de la gerencia de inventario. Datos generados dinámicamente desde el motor analítico del sistema.</div>
-        </body>
-      </html>
-    `;
-
-    const fileDate = reportDate.replace(/\//g, '-');
-    await renderHtmlToPdf(res, htmlContent, `reporte-gestion-inventario-${fileDate}.pdf`);
+    doc.moveDown(2);
+    doc.fontSize(9).fillColor('#64748b').text('Este informe es para uso exclusivo de la gerencia de inventario.');
+    finishPdf(doc);
   } catch (error: any) {
-    sendFallbackPdf(
-      res,
-      `reporte-gestion-inventario-error-${Date.now()}.pdf`,
-      'Reporte de gestión de inventario',
-      [
-        'No se pudo generar la version avanzada de inventario.',
-        `Detalle tecnico: ${error?.message || 'Error interno del servidor'}`,
-        'Se entrego una version basica para que la descarga siga funcionando.',
-      ]
-    );
+    if (!res.headersSent) {
+      const doc = createPdfDoc(res, `reporte-gestion-inventario-error-${Date.now()}.pdf`);
+      writeHeader(doc, 'Reporte de gestión de inventario', 'Se generó una versión básica de respaldo');
+      doc.font('Helvetica').fontSize(10).fillColor('#334155').text('No se pudo generar la versión avanzada del reporte.');
+      doc.text(`Detalle técnico: ${error?.message || 'Error interno del servidor'}`);
+      finishPdf(doc);
+    }
   }
 };
