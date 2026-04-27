@@ -320,12 +320,16 @@ export const generateManagementReport = async (_req: Request, res: Response) => 
     const fileDate = reportDate.replace(/\//g, '-');
     await renderHtmlToPdf(res, htmlContent, `reporte-gestion-${fileDate}.pdf`);
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: 'No se pudo generar el reporte de gestión',
-      detail: error?.message || 'Error interno del servidor',
-      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
-    });
+    sendFallbackPdf(
+      res,
+      `reporte-gestion-error-${Date.now()}.pdf`,
+      'Reporte de gestión',
+      [
+        'No se pudo generar la version avanzada de este reporte.',
+        `Detalle tecnico: ${error?.message || 'Error interno del servidor'}`,
+        'Se entrego una version basica para que la descarga siga funcionando.',
+      ]
+    );
   }
 };
 
@@ -521,11 +525,15 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
     const fileDate = reportDate.replace(/\//g, '-');
     await renderHtmlToPdf(res, htmlContent, `reporte-gestion-inventario-${fileDate}.pdf`);
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: 'No se pudo generar el reporte de inventario',
-      detail: error?.message || 'Error interno del servidor',
-      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
-    });
+    sendFallbackPdf(
+      res,
+      `reporte-gestion-inventario-error-${Date.now()}.pdf`,
+      'Reporte de gestión de inventario',
+      [
+        'No se pudo generar la version avanzada de inventario.',
+        `Detalle tecnico: ${error?.message || 'Error interno del servidor'}`,
+        'Se entrego una version basica para que la descarga siga funcionando.',
+      ]
+    );
   }
 };
