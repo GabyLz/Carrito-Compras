@@ -16,6 +16,20 @@ type ReportKpi = {
   carritosActivos: number;
 };
 
+const theme = {
+  navy: '#0f172a',
+  slate: '#475569',
+  text: '#1e293b',
+  muted: '#64748b',
+  border: '#dbe4ee',
+  surface: '#f8fafc',
+  accent: '#0f766e',
+  accentSoft: '#e6fffb',
+  danger: '#dc2626',
+  warning: '#d97706',
+  success: '#059669',
+};
+
 const safeText = (value: unknown) => String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
 
 const setPdfHeaders = (res: Response, filename: string) => {
@@ -35,16 +49,24 @@ const finishPdf = (doc: PDFDocument) => {
 };
 
 const writeHeader = (doc: PDFDocument, title: string, subtitle: string) => {
-  doc.rect(0, 0, doc.page.width, 72).fill('#0f172a');
-  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(20).text('Commerce Suite', 40, 24);
-  doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(16).text(title, 40, 96);
-  doc.font('Helvetica').fillColor('#475569').fontSize(10).text(subtitle, 40, 118);
-  doc.moveDown(1.5);
+  doc.rect(0, 0, doc.page.width, 92).fill(theme.navy);
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(18).text('Commerce Suite', 40, 22);
+  doc.fillColor('#cbd5e1').font('Helvetica').fontSize(9).text('Reporte empresarial', 40, 44);
+
+  doc.roundedRect(doc.page.width - 168, 20, 128, 34, 8).fillAndStroke('#111c33', '#334155');
+  doc.fillColor('#e2e8f0').font('Helvetica-Bold').fontSize(8).text('Gerencia', doc.page.width - 150, 30, { width: 90, align: 'center' });
+  doc.fillColor('#ffffff').fontSize(10).text('Exportación PDF', doc.page.width - 150, 41, { width: 90, align: 'center' });
+
+  doc.fillColor(theme.navy).font('Helvetica-Bold').fontSize(16).text(title, 40, 108);
+  doc.font('Helvetica').fillColor(theme.muted).fontSize(10).text(subtitle, 40, 128);
+  doc.moveTo(40, 145).lineTo(doc.page.width - 40, 145).lineWidth(1).stroke(theme.border);
+  doc.moveDown(1.2);
 };
 
 const writeSectionTitle = (doc: PDFDocument, title: string) => {
   doc.moveDown(0.5);
-  doc.font('Helvetica-Bold').fillColor('#0f172a').fontSize(13).text(title);
+  doc.font('Helvetica-Bold').fillColor(theme.navy).fontSize(13).text(title);
+  doc.moveTo(40, doc.y + 2).lineTo(125, doc.y + 2).lineWidth(2).stroke(theme.accent);
   doc.moveDown(0.3);
 };
 
@@ -58,8 +80,8 @@ const ensureSpace = (doc: PDFDocument, currentY: number, needed = 90) => {
 
 const drawTableHeader = (doc: PDFDocument, y: number, headers: string[], widths: number[]) => {
   const x = 40;
-  doc.rect(x, y, 540, 20).fill('#f1f5f9');
-  doc.fillColor('#475569').font('Helvetica-Bold').fontSize(10);
+  doc.roundedRect(x, y, 540, 22, 6).fillAndStroke(theme.surface, theme.border);
+  doc.fillColor(theme.slate).font('Helvetica-Bold').fontSize(9);
   let cursor = x + 5;
   headers.forEach((header, index) => {
     doc.text(header, cursor, y + 5);
@@ -69,15 +91,17 @@ const drawTableHeader = (doc: PDFDocument, y: number, headers: string[], widths:
 };
 
 const drawKpiCard = (doc: PDFDocument, x: number, y: number, width: number, label: string, value: string, tone = '#f8fafc') => {
-  doc.roundedRect(x, y, width, 70, 10).fillAndStroke(tone, '#e2e8f0');
-  doc.fillColor('#64748b').font('Helvetica').fontSize(9).text(label.toUpperCase(), x + 12, y + 12, { width: width - 24 });
-  doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(15).text(value, x + 12, y + 32, { width: width - 24 });
+  doc.roundedRect(x, y, width, 72, 10).fillAndStroke(tone, theme.border);
+  doc.moveTo(x, y).lineTo(x + width, y).lineWidth(3).stroke(theme.accent);
+  doc.fillColor(theme.muted).font('Helvetica').fontSize(8).text(label.toUpperCase(), x + 12, y + 14, { width: width - 24 });
+  doc.fillColor(theme.navy).font('Helvetica-Bold').fontSize(15).text(value, x + 12, y + 34, { width: width - 24 });
   doc.font('Helvetica');
 };
 
 const drawValueRow = (doc: PDFDocument, y: number, label: string, value: string, danger = false) => {
-  doc.fillColor('#334155').font('Helvetica').fontSize(10).text(label, 40, y, { width: 360 });
-  doc.fillColor(danger ? '#dc2626' : '#0f172a').font('Helvetica-Bold').text(value, 420, y, { width: 160, align: 'right' });
+  doc.roundedRect(40, y - 2, 540, 18, 5).fillAndStroke('#ffffff', theme.border);
+  doc.fillColor(theme.slate).font('Helvetica').fontSize(10).text(label, 50, y, { width: 350 });
+  doc.fillColor(danger ? theme.danger : theme.navy).font('Helvetica-Bold').text(value, 420, y, { width: 150, align: 'right' });
   doc.font('Helvetica');
   return y + 20;
 };
@@ -86,7 +110,7 @@ const writeLowStockSection = (doc: PDFDocument, products: ProductLowStock[]) => 
   writeSectionTitle(doc, 'Productos con bajo stock');
 
   if (!products.length) {
-    doc.fillColor('#64748b').font('Helvetica').fontSize(10).text('No hay productos con bajo stock.');
+    doc.fillColor(theme.muted).font('Helvetica').fontSize(10).text('No hay productos con bajo stock.');
     return;
   }
 
@@ -94,14 +118,14 @@ const writeLowStockSection = (doc: PDFDocument, products: ProductLowStock[]) => 
   products.slice(0, 100).forEach((product, index) => {
     y = ensureSpace(doc, y, 110);
     if (index % 2 === 0) {
-      doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+      doc.rect(40, y - 2, 540, 20).fill('#fcfdff');
     }
 
-    doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+    doc.fillColor(theme.text).font('Helvetica').fontSize(10);
     doc.text(safeText(product.nombre), 45, y, { width: 220 });
     doc.text(safeText(product.categoria?.nombre || '-'), 275, y, { width: 140 });
-    doc.fillColor(product.stock_general <= 0 ? '#dc2626' : '#f59e0b').font('Helvetica-Bold').text(String(Number(product.stock_general || 0)), 425, y, { width: 70, align: 'right' });
-    doc.fillColor('#1e293b').font('Helvetica').text(String(Number(product.stock_minimo || 0)), 505, y, { width: 70, align: 'right' });
+    doc.fillColor(product.stock_general <= 0 ? theme.danger : theme.warning).font('Helvetica-Bold').text(String(Number(product.stock_general || 0)), 425, y, { width: 70, align: 'right' });
+    doc.fillColor(theme.text).font('Helvetica').text(String(Number(product.stock_minimo || 0)), 505, y, { width: 70, align: 'right' });
     y += 25;
   });
 };
@@ -121,28 +145,32 @@ const buildManagementPdf = (
   const doc = createPdfDoc(res, filename);
   writeHeader(doc, title, subtitle);
 
+  doc.roundedRect(40, 160, 540, 42, 8).fillAndStroke('#eff6ff', '#dbeafe');
+  doc.fillColor(theme.slate).font('Helvetica').fontSize(9).text('Resumen ejecutivo', 52, 168);
+  doc.fillColor(theme.navy).font('Helvetica-Bold').fontSize(10).text('Documento de apoyo para decisiones gerenciales, con indicadores financieros, clientes, inventario y alertas.', 52, 182, { width: 510 });
+
   drawKpiCard(doc, 40, 150, 120, 'Ventas netas', `S/ ${kpi.ventasNetas.toLocaleString('es-PE')}`);
   drawKpiCard(doc, 170, 150, 120, 'Ticket promedio', `S/ ${kpi.ticketPromedio.toLocaleString('es-PE')}`);
   drawKpiCard(doc, 300, 150, 120, 'Conversión 30d', String(kpi.conversionMes));
   drawKpiCard(doc, 430, 150, 150, 'Carritos activos', String(kpi.carritosActivos));
 
-  let y = 240;
+  let y = 250;
 
   writeSectionTitle(doc, 'Rentabilidad por producto');
   y = drawTableHeader(doc, doc.y + 6, ['Producto', 'Unid.', 'Ingresos', 'Costos', 'Utilidad', 'Margen'], [190, 60, 95, 95, 95, 5]);
   rentabilidadProductos.slice(0, 10).forEach((row, index) => {
     y = ensureSpace(doc, y, 120);
     if (index % 2 === 0) {
-      doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+      doc.rect(40, y - 2, 540, 20).fill('#fcfdff');
     }
     const margen = row.ingresos > 0 ? (row.utilidad / row.ingresos) * 100 : 0;
-    doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+    doc.fillColor(theme.text).font('Helvetica').fontSize(10);
     doc.text(safeText(row.nombre), 45, y, { width: 180 });
     doc.text(String(row.unidades), 235, y, { width: 55, align: 'right' });
     doc.text(`S/ ${row.ingresos.toLocaleString('es-PE')}`, 295, y, { width: 90, align: 'right' });
     doc.text(`S/ ${row.costos.toLocaleString('es-PE')}`, 390, y, { width: 90, align: 'right' });
-    doc.fillColor('#059669').font('Helvetica-Bold').text(`S/ ${row.utilidad.toLocaleString('es-PE')}`, 485, y, { width: 70, align: 'right' });
-    doc.fillColor('#1e293b').font('Helvetica').text(`${margen.toFixed(1)}%`, 555, y, { width: 20, align: 'right' });
+    doc.fillColor(theme.success).font('Helvetica-Bold').text(`S/ ${row.utilidad.toLocaleString('es-PE')}`, 485, y, { width: 70, align: 'right' });
+    doc.fillColor(theme.text).font('Helvetica').text(`${margen.toFixed(1)}%`, 555, y, { width: 20, align: 'right' });
     y += 25;
   });
 
@@ -192,7 +220,8 @@ const buildManagementPdf = (
   writeLowStockSection(doc, bajoStock);
 
   doc.moveDown(2);
-  doc.fontSize(9).fillColor('#64748b').text('Este informe es para uso exclusivo de la gerencia.');
+  doc.moveTo(40, doc.y + 4).lineTo(doc.page.width - 40, doc.y + 4).lineWidth(1).stroke(theme.border);
+  doc.fontSize(9).fillColor(theme.muted).text('Este informe es para uso exclusivo de la gerencia.', 40, doc.page.height - 40, { align: 'center', width: doc.page.width - 80 });
   finishPdf(doc);
 };
 
@@ -397,26 +426,30 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
     const doc = createPdfDoc(res, `reporte-gestion-inventario-${reportDate.replace(/\//g, '-')}.pdf`);
     writeHeader(doc, 'Reporte de gestión de inventario', `Análisis de inventario y bajo stock | ${reportDate}`);
 
+    doc.roundedRect(40, 160, 540, 42, 8).fillAndStroke('#ecfeff', '#cffafe');
+    doc.fillColor(theme.slate).font('Helvetica').fontSize(9).text('Resumen ejecutivo', 52, 168);
+    doc.fillColor(theme.navy).font('Helvetica-Bold').fontSize(10).text('Visión consolidada de inventario, categorías, distribución de stock y productos para reposición.', 52, 182, { width: 510 });
+
     drawKpiCard(doc, 40, 150, 120, 'Productos únicos', String(Number(inv.total_productos || 0)));
     drawKpiCard(doc, 170, 150, 120, 'Valor inventario', `S/ ${Number(inv.valor_total || 0).toLocaleString('es-PE')}`);
     drawKpiCard(doc, 300, 150, 120, 'Bajo stock', String(Number(inv.bajo_stock || 0)));
     drawKpiCard(doc, 430, 150, 150, 'Producto más valioso', safeText(masValioso.nombre));
 
-    let y = 245;
+    let y = 250;
     writeSectionTitle(doc, 'Top 10 categorías con más productos');
     y = drawTableHeader(doc, doc.y + 6, ['Categoría', 'Total', 'Observación'], [230, 70, 240]);
     const maxCategoria = Math.max(...topCategoriasInventario.map((x: { total: number }) => Number(x.total || 0)), 1);
     topCategoriasInventario.slice(0, 10).forEach((row, index) => {
       y = ensureSpace(doc, y, 120);
       if (index % 2 === 0) {
-        doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+        doc.rect(40, y - 2, 540, 20).fill('#fcfdff');
       }
       const progress = Math.max((Number(row.total || 0) / maxCategoria) * 100, 2);
-      doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+      doc.fillColor(theme.text).font('Helvetica').fontSize(10);
       doc.text(safeText(row.nombre), 45, y, { width: 220 });
       doc.text(String(Number(row.total || 0)), 285, y, { width: 60, align: 'right' });
       doc.rect(360, y + 4, 190, 10).fill('#e2e8f0');
-      doc.rect(360, y + 4, Math.max((190 * progress) / 100, 4), 10).fill('#0ea5a4');
+      doc.rect(360, y + 4, Math.max((190 * progress) / 100, 4), 10).fill(theme.accent);
       y += 25;
     });
 
@@ -426,13 +459,13 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
     distribucionStock.forEach((row, index) => {
       y = ensureSpace(doc, y, 120);
       if (index % 2 === 0) {
-        doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+        doc.rect(40, y - 2, 540, 20).fill('#fcfdff');
       }
       const note = row.nombre === 'Sin stock' ? 'Atención inmediata' : row.nombre === 'Bajo stock' ? 'Revisar reposición' : 'Correcto';
-      doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+      doc.fillColor(theme.text).font('Helvetica').fontSize(10);
       doc.text(safeText(row.nombre), 45, y, { width: 160 });
       doc.text(String(Number(row.total || 0)), 230, y, { width: 70, align: 'right' });
-      doc.fillColor(row.nombre === 'Sin stock' ? '#dc2626' : row.nombre === 'Bajo stock' ? '#f59e0b' : '#059669').font('Helvetica-Bold').text(note, 320, y, { width: 230 });
+      doc.fillColor(row.nombre === 'Sin stock' ? theme.danger : row.nombre === 'Bajo stock' ? theme.warning : theme.success).font('Helvetica-Bold').text(note, 320, y, { width: 230 });
       doc.font('Helvetica');
       y += 25;
     });
@@ -443,27 +476,28 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
     reorderList.forEach((row, index) => {
       y = ensureSpace(doc, y, 110);
       if (index % 2 === 0) {
-        doc.rect(40, y - 2, 540, 20).fill('#f8fafc');
+        doc.rect(40, y - 2, 540, 20).fill('#fcfdff');
       }
-      doc.fillColor('#1e293b').font('Helvetica').fontSize(10);
+      doc.fillColor(theme.text).font('Helvetica').fontSize(10);
       doc.text(safeText(row.sku || '-'), 45, y, { width: 70 });
       doc.text(safeText(row.nombre), 125, y, { width: 165 });
       doc.text(safeText(row.categoria), 300, y, { width: 115 });
       doc.text(String(Number(row.stock_actual || 0)), 425, y, { width: 55, align: 'right' });
       doc.text(String(Number(row.stock_minimo || 0)), 485, y, { width: 55, align: 'right' });
-      doc.fillColor('#dc2626').font('Helvetica-Bold').text(String(Number(row.faltante || 0)), 540, y, { width: 40, align: 'right' });
+      doc.fillColor(theme.danger).font('Helvetica-Bold').text(String(Number(row.faltante || 0)), 540, y, { width: 40, align: 'right' });
       doc.font('Helvetica');
       y += 25;
     });
 
     doc.moveDown(2);
-    doc.fontSize(9).fillColor('#64748b').text('Este informe es para uso exclusivo de la gerencia de inventario.');
+    doc.moveTo(40, doc.y + 4).lineTo(doc.page.width - 40, doc.y + 4).lineWidth(1).stroke(theme.border);
+    doc.fontSize(9).fillColor(theme.muted).text('Este informe es para uso exclusivo de la gerencia de inventario.', 40, doc.page.height - 40, { align: 'center', width: doc.page.width - 80 });
     finishPdf(doc);
   } catch (error: any) {
     if (!res.headersSent) {
       const doc = createPdfDoc(res, `reporte-gestion-inventario-error-${Date.now()}.pdf`);
       writeHeader(doc, 'Reporte de gestión de inventario', 'Se generó una versión básica de respaldo');
-      doc.font('Helvetica').fontSize(10).fillColor('#334155').text('No se pudo generar la versión avanzada del reporte.');
+      doc.font('Helvetica').fontSize(10).fillColor(theme.text).text('No se pudo generar la versión avanzada del reporte.');
       doc.text(`Detalle técnico: ${error?.message || 'Error interno del servidor'}`);
       finishPdf(doc);
     }
