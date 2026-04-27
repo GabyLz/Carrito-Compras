@@ -19,27 +19,29 @@ import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
 app.use(helmet());
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
 
-      const normalizedOrigin = origin.toLowerCase();
-      const allowedExact = new Set([config.frontendUrl.toLowerCase()]);
-      const isVercelOrigin =
-        normalizedOrigin.startsWith('https://') && normalizedOrigin.includes('.vercel.app');
+    const normalizedOrigin = origin.toLowerCase();
+    const allowedExact = new Set([config.frontendUrl.toLowerCase()]);
+    const isVercelOrigin = normalizedOrigin.startsWith('https://') && normalizedOrigin.includes('.vercel.app');
+    const isLocalDevOrigin =
+      normalizedOrigin.startsWith('http://localhost:') || normalizedOrigin.startsWith('http://127.0.0.1:');
 
-      const isLocalDevOrigin =
-        normalizedOrigin.startsWith('http://localhost:') || normalizedOrigin.startsWith('http://127.0.0.1:');
+    if (config.nodeEnv !== 'production' && isLocalDevOrigin) return callback(null, true);
+    if (isVercelOrigin) return callback(null, true);
+    if (allowedExact.has(normalizedOrigin)) return callback(null, true);
 
-      if (config.nodeEnv !== 'production' && isLocalDevOrigin) return callback(null, true);
-      if (isVercelOrigin) return callback(null, true);
-      if (allowedExact.has(normalizedOrigin)) return callback(null, true);
+    return callback(new Error(`CORS bloqueado para el origen: ${origin}`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 204,
+};
 
-      return callback(new Error(`CORS bloqueado para el origen: ${origin}`));
-    },
-  })
-);
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(morgan('dev'));
 
