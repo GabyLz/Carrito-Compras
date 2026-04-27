@@ -12,6 +12,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:seed-sql": "ts-node prisma/seed-neon.ts",
     "test": "jest"
   },
   "dependencies": {
