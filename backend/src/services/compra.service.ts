@@ -44,7 +44,7 @@ export class CompraService {
 
     const prisma = (await import('../lib/prisma')).default;
     
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: any) => {
       // 1. Create the purchase order
       const orden = await this.repository.create(data);
 
@@ -82,7 +82,7 @@ export class CompraService {
       throw new Error('La orden ya ha sido recibida');
     }
 
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: any) => {
       // 1. Create reception record
       await tx.inv_recepciones.create({
         data: {

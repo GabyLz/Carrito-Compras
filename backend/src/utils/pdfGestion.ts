@@ -367,8 +367,9 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
 
     const inv = inventoryKpis[0] || { total_productos: 0, valor_total: 0, bajo_stock: 0 };
     const masValioso = productoMasValioso[0] || { sku: '-', nombre: 'Sin datos', valor_total: 0 };
-    const totalDistribucion = distribucionStock.reduce((acc, cur) => acc + Number(cur.total || 0), 0) || 1;
-    const maxCategoria = Math.max(...topCategoriasInventario.map((x) => Number(x.total || 0)), 1);
+    const totalDistribucion =
+      distribucionStock.reduce((acc: number, cur: { total: number }) => acc + Number(cur.total || 0), 0) || 1;
+    const maxCategoria = Math.max(...topCategoriasInventario.map((x: { total: number }) => Number(x.total || 0)), 1);
 
     const piePalette: Record<string, string> = {
       'Stock OK': '#0ea5a4',
@@ -378,7 +379,7 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
 
     let accum = 0;
     const pieGradient = distribucionStock
-      .map((item) => {
+      .map((item: { nombre: string; total: number }) => {
         const ratio = (Number(item.total || 0) / totalDistribucion) * 100;
         const start = accum;
         const end = accum + ratio;
@@ -411,7 +412,7 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
             <div class="grid-2">
               <div class="chart-wrap">
                 <div class="chart-title">Top 10 categorías con más productos</div>
-                ${topCategoriasInventario.map((row) => {
+                ${topCategoriasInventario.map((row: { nombre: string; total: number }) => {
                   const width = Math.max((Number(row.total || 0) / maxCategoria) * 100, 2);
                   return `
                     <div class="bar-row">
@@ -428,7 +429,7 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
                 <div class="pie-wrap">
                   <div class="pie-chart" style="background: conic-gradient(${pieGradient || '#cbd5e1 0% 100%'});"></div>
                   <div class="pie-legend">
-                    ${distribucionStock.map((row) => `
+                    ${distribucionStock.map((row: { nombre: string; total: number }) => `
                       <div class="legend-item">
                         <div class="legend-left">
                           <span class="dot" style="background:${piePalette[row.nombre] || '#64748b'}"></span>
@@ -460,7 +461,14 @@ export const generateInventoryStockReport = async (_req: Request, res: Response)
                     ? '<tr><td colspan="6" style="text-align:center;color:#64748b;">No hay productos para reordenar.</td></tr>'
                     : reorderList
                         .map(
-                          (row) => `
+                          (row: {
+                            sku: string | null;
+                            nombre: string;
+                            categoria: string;
+                            stock_actual: number;
+                            stock_minimo: number;
+                            faltante: number;
+                          }) => `
                     <tr>
                       <td>${safeText(row.sku || '-')}</td>
                       <td class="font-bold">${safeText(row.nombre)}</td>
