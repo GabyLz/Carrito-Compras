@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Source+Serif+4:wght@600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	--bg: #f3f6fa;
+	--surface: #ffffff;
+	--surface-soft: #f8fbff;
+	--text: #0f172a;
+	--muted: #52607a;
+	--brand: #0c4a6e;
+	--brand-soft: #e0f2fe;
+	--border: #d9e1ec;
+	--ok: #166534;
+	--warn: #9a3412;
+	--pending: #92400e;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: 'Manrope', sans-serif;
+	color: var(--text);
+	background:
+		radial-gradient(circle at top left, #eff6ff 0%, transparent 32%),
+		radial-gradient(circle at 80% 10%, #e0f2fe 0%, transparent 28%),
+		var(--bg);
+	min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+	font-family: 'Source Serif 4', serif;
+}
+
+#root {
+	min-height: 100vh;
+}
+
+.app-shell {
+	width: min(1240px, calc(100% - 2rem));
+	margin: 0 auto;
+}
+
+.panel {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+}

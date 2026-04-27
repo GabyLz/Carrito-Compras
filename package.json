@@ -1,0 +1,20 @@
+{
+  "name": "carrito-compras",
+  "version": "1.0.0",
+  "description": "Sistema de Carrito de Compras con React, Node.js y Prisma",
+  "scripts": {
+    "dev": "node scripts/dev.cjs",
+    "build": "npm run build --workspaces",
+    "start": "npm run start --workspace=backend"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

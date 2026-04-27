@@ -1,0 +1,713 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model cat_categorias {
+  id                 Int              @id @default(autoincrement())
+  nombre             String           @unique @db.VarChar(100)
+  descripcion        String?
+  id_categoria_padre Int?
+  activo             Boolean?         @default(true)
+  created_at         DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?        @default(now()) @updatedAt @db.Timestamp(6)
+  parent             cat_categorias?  @relation("CategoriaHijo", fields: [id_categoria_padre], references: [id], onUpdate: NoAction)
+  hijos              cat_categorias[] @relation("CategoriaHijo")
+  productos          cat_productos[]
+
+  @@index([activo], map: "idx_cat_categorias_activo")
+  @@index([id_categoria_padre], map: "idx_cat_categorias_padre")
+}
+
+model cat_marcas {
+  id        Int             @id @default(autoincrement())
+  nombre    String          @unique @db.VarChar(100)
+  logo_url  String?
+  activo    Boolean?        @default(true)
+  productos cat_productos[]
+}
+
+model cat_unidades_medida {
+  id          Int             @id @default(autoincrement())
+  nombre      String          @unique @db.VarChar(50)
+  abreviatura String          @db.VarChar(10)
+  productos   cat_productos[]
+}
+
+model cat_productos {
+  id                       Int                          @id @default(autoincrement())
+  sku                      String                       @unique @db.VarChar(50)
+  nombre                   String                       @db.VarChar(200)
+  descripcion_corta        String?
+  descripcion_larga        String?
+  precio_costo             Decimal                      @db.Decimal(12, 2)
+  precio_venta             Decimal                      @db.Decimal(12, 2)
+  precio_oferta            Decimal?                     @db.Decimal(12, 2)
+  fecha_inicio_oferta      DateTime?                    @db.Date
+  fecha_fin_oferta         DateTime?                    @db.Date
+  stock_general            Int                          @default(0)
+  stock_minimo             Int                          @default(0)
+  peso                     Decimal?                     @db.Decimal(8, 2)
+  dimensiones              Json?
+  id_marca                 Int?
+  id_categoria             Int?
+  id_unidad_medida         Int?
+  estado_producto          String?                      @default("activo") @db.VarChar(20)
+  created_at               DateTime?                    @default(now()) @db.Timestamp(6)
+  updated_at               DateTime?                    @default(now()) @updatedAt @db.Timestamp(6)
+  imagenes                 cat_imagenes_producto[]
+  etiquetas                cat_producto_etiqueta[]
+  variantes                cat_producto_variante[]
+  marca                    cat_marcas?                  @relation(fields: [id_marca], references: [id], onUpdate: NoAction)
+  categoria                cat_categorias?              @relation(fields: [id_categoria], references: [id], onUpdate: NoAction)
+  unidad_medida            cat_unidades_medida?         @relation(fields: [id_unidad_medida], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cli_historial_navegacion cli_historial_navegacion[]
+  cli_items_lista_deseos   cli_items_lista_deseos[]
+  resenas                  cli_resenas_producto[]
+  inv_detalle_ajuste       inv_detalle_ajuste[]
+  inv_detalle_orden_compra inv_detalle_orden_compra[]
+  movimientos              inv_movimientos_inventario[]
+  inv_reservas_stock       inv_reservas_stock[]
+  stock_producto           inv_stock_producto[]
+  items_carrito            ord_items_carrito[]
+  items_orden              ord_items_orden[]
+  seg_eventos_tracking     seg_eventos_tracking[]
+
+  @@index([estado_producto], map: "idx_cat_productos_estado")
+  @@index([nombre], map: "idx_cat_productos_nombre")
+  @@index([precio_venta], map: "idx_cat_productos_precio")
+  @@index([sku], map: "idx_cat_productos_sku")
+}
+
+model cat_imagenes_producto {
+  id                    Int                    @id @default(autoincrement())
+  id_producto           Int?
+  id_variante           Int?
+  url                   String
+  orden                 Int?                   @default(0)
+  producto              cat_productos?         @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variante              cat_producto_variante? @relation(fields: [id_variante], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([id_producto, orden])
+  @@unique([id_variante, orden])
+  @@index([id_producto], map: "idx_imagenes_producto")
+  @@index([id_variante], map: "idx_imagenes_variante")
+}
+
+model cli_clientes {
+  id                       Int                        @id @default(autoincrement())
+  nombre                   String                     @db.VarChar(100)
+  apellido                 String?                    @db.VarChar(100)
+  email                    String                     @unique @db.VarChar(150)
+  email_verificado         Boolean?                   @default(false)
+  telefono                 String?                    @db.VarChar(20)
+  fecha_registro           DateTime?                  @default(now()) @db.Timestamp(6)
+  recibir_promociones      Boolean?                   @default(true)
+  activo                   Boolean?                   @default(true)
+  direcciones              cli_direcciones[]
+  cli_historial_navegacion cli_historial_navegacion[]
+  lista_deseos             cli_lista_deseos?
+  resenas                  cli_resenas_producto[]
+  carritos                 ord_carritos?
+  ordenes                  ord_ordenes[]
+  seg_eventos_tracking     seg_eventos_tracking[]
+  usuario                  seg_usuarios?
+
+  @@index([email], map: "idx_cli_clientes_email")
+  @@index([fecha_registro], map: "idx_cli_clientes_fecha_registro")
+}
+
+model cli_direcciones {
+  id                  Int           @id @default(autoincrement())
+  id_cliente          Int
+  nombre_destinatario String?       @db.VarChar(100)
+  calle               String        @db.VarChar(255)
+  numero              String?       @db.VarChar(20)
+  complemento         String?       @db.VarChar(100)
+  ciudad              String?       @db.VarChar(100)
+  provincia           String?       @db.VarChar(100)
+  codigo_postal       String?       @db.VarChar(20)
+  pais                String?       @default("España") @db.VarChar(100)
+  telefono_contacto   String?       @db.VarChar(20)
+  principal           Boolean?      @default(false)
+  created_at          DateTime?     @default(now()) @db.Timestamp(6)
+  cliente             cli_clientes  @relation(fields: [id_cliente], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ordenes             ord_ordenes[]
+
+  @@index([id_cliente], map: "idx_direcciones_cliente")
+}
+
+model cli_lista_deseos {
+  id                     Int                      @id @default(autoincrement())
+  id_cliente             Int                      @unique
+  creado                 DateTime?                @default(now()) @db.Timestamp(6)
+  cli_items_lista_deseos cli_items_lista_deseos[]
+  cliente                cli_clientes             @relation(fields: [id_cliente], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model cli_resenas_producto {
+  id                    Int                    @id @default(autoincrement())
+  id_cliente            Int
+  id_producto           Int
+  id_variante           Int?
+  calificacion          Int
+  comentario            String?
+  fecha                 DateTime?              @default(now()) @db.Timestamp(6)
+  cliente               cli_clientes           @relation(fields: [id_cliente], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  producto              cat_productos          @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variante              cat_producto_variante? @relation(fields: [id_variante], references: [id], onUpdate: NoAction)
+
+  @@unique([id_cliente, id_producto, id_variante])
+  @@index([id_producto], map: "idx_resenas_producto")
+}
+
+model ord_carritos {
+  id          Int                 @id @default(autoincrement())
+  id_cliente  Int                 @unique
+  creado      DateTime?           @default(now()) @db.Timestamp(6)
+  actualizado DateTime?           @default(now()) @updatedAt @db.Timestamp(6)
+  cliente     cli_clientes        @relation(fields: [id_cliente], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  items       ord_items_carrito[]
+}
+
+model ord_items_carrito {
+  id                    Int                    @id @default(autoincrement())
+  id_carrito            Int
+  id_producto           Int
+  id_variante           Int?
+  cantidad              Int
+  carrito               ord_carritos           @relation(fields: [id_carrito], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  producto              cat_productos          @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variante              cat_producto_variante? @relation(fields: [id_variante], references: [id], onUpdate: NoAction)
+
+  @@unique([id_carrito, id_producto, id_variante])
+}
+
+model ord_estados_orden {
+  id                    Int                     @id @default(autoincrement())
+  nombre                String                  @unique @db.VarChar(50)
+  ord_historial_estados ord_historial_estados[]
+  ordenes               ord_ordenes[]
+}
+
+model ord_metodos_envio {
+  id              Int           @id @default(autoincrement())
+  nombre          String        @unique @db.VarChar(100)
+  costo           Decimal       @db.Decimal(10, 2)
+  tiempo_estimado String?       @db.VarChar(100)
+  ordenes         ord_ordenes[]
+}
+
+model ord_cupones {
+  id            Int           @id @default(autoincrement())
+  codigo        String        @unique @db.VarChar(50)
+  tipo          String        @db.VarChar(20)
+  valor         Decimal       @db.Decimal(10, 2)
+  monto_minimo  Decimal?      @default(0) @db.Decimal(10, 2)
+  fecha_inicio  DateTime      @db.Date
+  fecha_fin     DateTime      @db.Date
+  usos_maximos  Int?
+  usos_actuales Int?          @default(0)
+  activo        Boolean?      @default(true)
+  created_at    DateTime?     @default(now()) @db.Timestamp(6)
+  ord_ordenes   ord_ordenes[]
+
+  @@index([codigo], map: "idx_cupones_codigo")
+  @@index([fecha_inicio, fecha_fin], map: "idx_cupones_vigencia")
+}
+
+model ord_ordenes {
+  id                    Int                     @id @default(autoincrement())
+  id_cliente            Int
+  id_direccion_envio    Int
+  id_estado             Int
+  id_metodo_envio       Int?
+  id_metodo_pago        Int?
+  id_cupon_aplicado     Int?
+  subtotal              Decimal                 @db.Decimal(12, 2)
+  descuento             Decimal?                @default(0) @db.Decimal(12, 2)
+  impuestos             Decimal?                @default(0) @db.Decimal(12, 2)
+  costo_envio           Decimal?                @default(0) @db.Decimal(10, 2)
+  total                 Decimal                 @db.Decimal(12, 2)
+  numero_guia           String?                 @db.VarChar(100)
+  transportista         String?                 @db.VarChar(100)
+  fecha                 DateTime?               @default(now()) @db.Timestamp(6)
+  created_at            DateTime?               @default(now()) @db.Timestamp(6)
+  updated_at            DateTime?               @default(now()) @updatedAt @db.Timestamp(6)
+  ord_devoluciones      ord_devoluciones[]
+  ord_historial_estados ord_historial_estados[]
+  items                 ord_items_orden[]
+  cliente               cli_clientes            @relation(fields: [id_cliente], references: [id], onUpdate: NoAction)
+  cupon                 ord_cupones?            @relation(fields: [id_cupon_aplicado], references: [id], onUpdate: NoAction)
+  direccion             cli_direcciones         @relation(fields: [id_direccion_envio], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  estado                ord_estados_orden       @relation(fields: [id_estado], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  metodo_envio          ord_metodos_envio?      @relation(fields: [id_metodo_envio], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  metodo_pago           ord_metodos_pago?       @relation(fields: [id_metodo_pago], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pagos                 ord_pagos[]
+
+  @@index([id_cliente], map: "idx_ordenes_cliente")
+  @@index([id_estado], map: "idx_ordenes_estado")
+  @@index([fecha], map: "idx_ordenes_fecha")
+  @@index([fecha, id_estado], map: "idx_ordenes_fecha_estado")
+  @@index([numero_guia], map: "idx_ordenes_guia")
+}
+
+model ord_items_orden {
+  id                    Int                    @id @default(autoincrement())
+  id_orden              Int
+  id_producto           Int
+  id_variante           Int?
+  cantidad              Int
+  precio_unitario       Decimal                @db.Decimal(12, 2)
+  subtotal              Decimal                @db.Decimal(12, 2)
+  ord_devolucion_items  ord_devolucion_items[]
+  orden                 ord_ordenes            @relation(fields: [id_orden], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  producto              cat_productos          @relation(fields: [id_producto], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variante              cat_producto_variante? @relation(fields: [id_variante], references: [id], onUpdate: NoAction)
+
+  @@index([id_orden], map: "idx_items_orden")
+  @@index([id_producto], map: "idx_items_producto")
+}
+
+model ord_pagos {
+  id                     Int                      @id @default(autoincrement())
+  id_orden               Int
+  monto                  Decimal                  @db.Decimal(12, 2)
+  id_metodo_pago         Int?
+  referencia_externa     String?                  @db.VarChar(100)
+  estado                 String?                  @default("pendiente") @db.VarChar(20)
+  creado                 DateTime?                @default(now()) @db.Timestamp(6)
+  metodo                 ord_metodos_pago?        @relation(fields: [id_metodo_pago], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orden                  ord_ordenes              @relation(fields: [id_orden], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  ord_transacciones_pago ord_transacciones_pago[]
+}
+
+model inv_almacenes {
+  id                 Int                  @id @default(autoincrement())
+  nombre             String               @unique @db.VarChar(100)
+  ubicacion          String?              @db.VarChar(200)
+  inv_ordenes_compra inv_ordenes_compra[]
+  inv_reservas_stock inv_reservas_stock[]
+  stock_producto     inv_stock_producto[]
+}
+
+model inv_stock_producto {
+  id                    Int                    @id @default(autoincrement())
+  id_producto           Int?
+  id_variante           Int?
+  id_almacen            Int
+  cantidad              Int                    @default(0)
+  almacen               inv_almacenes          @relation(fields: [id_almacen], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  producto              cat_productos?         @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variante              cat_producto_variante? @relation(fields: [id_variante], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([id_producto, id_variante, id_almacen])
+  @@index([id_almacen], map: "idx_stock_almacen")
+  @@index([id_producto], map: "idx_stock_producto")
+  @@index([id_variante], map: "idx_stock_variante")
+}
+
+model inv_movimientos_inventario {
+  id                    Int                    @id @default(autoincrement())
+  id_producto           Int?
+  id_variante           Int?
+  tipo                  String                 @db.VarChar(20)
+  cantidad              Int
+  motivo                String?
+  fecha                 DateTime?              @default(now()) @db.Timestamp(6)
+  id_usuario            Int?
+  producto              cat_productos?         @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  variante              cat_producto_variante? @relation(fields: [id_variante], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([fecha], map: "idx_movimientos_fecha")
+  @@index([id_producto], map: "idx_movimientos_producto")
+}
+
+model inv_proveedores {
+  id             Int                  @id @default(autoincrement())
+  nombre         String               @unique @db.VarChar(150)
+  contacto       String?              @db.VarChar(100)
+  telefono       String?              @db.VarChar(20)
+  email          String?              @db.VarChar(150)
+  ordenes_compra inv_ordenes_compra[]
+}
+
+model inv_ordenes_compra {
+  id                       Int                        @id @default(autoincrement())
+  id_proveedor             Int
+  id_almacen               Int
+  total                    Decimal?                   @db.Decimal(12, 2)
+  estado                   String?                    @default("pendiente") @db.VarChar(20)
+  fecha_pedido             DateTime?                  @default(now()) @db.Timestamp(6)
+  fecha_recepcion          DateTime?                  @db.Timestamp(6)
+  pagado                   Boolean?                   @default(false)
+  fecha_pago               DateTime?                  @db.Timestamp(6)
+  detalles                 inv_detalle_orden_compra[]
+  almacen                  inv_almacenes              @relation(fields: [id_almacen], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  proveedor                inv_proveedores            @relation(fields: [id_proveedor], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inv_recepciones          inv_recepciones[]
+}
+
+model seg_roles {
+  id             Int               @id @default(autoincrement())
+  nombre         String            @unique @db.VarChar(50)
+  roles_permisos seg_rol_permiso[]
+  usuarios_roles seg_usuario_rol[]
+}
+
+model seg_permisos {
+  id             Int               @id @default(autoincrement())
+  nombre         String            @unique @db.VarChar(100)
+  recurso        String?           @db.VarChar(100)
+  roles_permisos seg_rol_permiso[]
+}
+
+model seg_rol_permiso {
+  id         Int          @id @default(autoincrement())
+  id_rol     Int
+  id_permiso Int
+  permiso    seg_permisos @relation(fields: [id_permiso], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  rol        seg_roles    @relation(fields: [id_rol], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([id_rol, id_permiso])
+}
+
+model seg_usuarios {
+  id                 Int                  @id @default(autoincrement())
+  email              String               @unique @db.VarChar(150)
+  password_hash      String               @db.VarChar(255)
+  id_cliente         Int?                 @unique
+  activo             Boolean?             @default(true)
+  created_at         DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?            @default(now()) @updatedAt @db.Timestamp(6)
+  auditoria_registro auditoria_registro[]
+  refresh_tokens     seg_refresh_tokens[]
+  seg_tokens         seg_tokens[]
+  roles              seg_usuario_rol[]
+  cliente            cli_clientes?        @relation(fields: [id_cliente], references: [id], onUpdate: NoAction)
+
+  @@index([id_cliente], map: "idx_usuarios_cliente")
+  @@index([email], map: "idx_usuarios_email")
+}
+
+model seg_usuario_rol {
+  id         Int          @id @default(autoincrement())
+  id_usuario Int
+  id_rol     Int
+  rol        seg_roles    @relation(fields: [id_rol], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  usuario    seg_usuarios @relation(fields: [id_usuario], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([id_usuario, id_rol])
+}
+
+model seg_refresh_tokens {
+  id         Int          @id @default(autoincrement())
+  id_usuario Int
+  token_hash String       @unique @db.VarChar(255)
+  expiracion DateTime     @db.Timestamp(6)
+  revocado   Boolean?     @default(false)
+  created_at DateTime?    @default(now()) @db.Timestamp(6)
+  usuario    seg_usuarios @relation(fields: [id_usuario], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([token_hash], map: "idx_refresh_token_hash")
+  @@index([id_usuario], map: "idx_refresh_usuario")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auditoria_registro {
+  id            Int           @id @default(autoincrement())
+  nombre_tabla  String        @db.VarChar(100)
+  id_registro   Int
+  operacion     String        @db.VarChar(10)
+  datos_previos Json?
+  datos_nuevos  Json?
+  id_usuario    Int?
+  ip_origen     String?       @db.Inet
+  user_agent    String?
+  fecha         DateTime?     @default(now()) @db.Timestamp(6)
+  seg_usuarios  seg_usuarios? @relation(fields: [id_usuario], references: [id], onUpdate: NoAction)
+
+  @@index([fecha], map: "idx_auditoria_fecha")
+  @@index([nombre_tabla, id_registro], map: "idx_auditoria_tabla")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model cat_atributos {
+  id                   Int                    @id @default(autoincrement())
+  nombre               String                 @db.VarChar(100)
+  tipo                 String?                @default("texto") @db.VarChar(20)
+  cat_valores_atributo cat_valores_atributo[]
+}
+
+model cat_etiquetas {
+  id                    Int                     @id @default(autoincrement())
+  nombre                String                  @unique @db.VarChar(50)
+  cat_producto_etiqueta cat_producto_etiqueta[]
+}
+
+model cat_producto_etiqueta {
+  id            Int           @id @default(autoincrement())
+  id_producto   Int
+  id_etiqueta   Int
+  etiqueta      cat_etiquetas @relation(fields: [id_etiqueta], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  producto      cat_productos @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([id_producto, id_etiqueta])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model cat_producto_variante {
+  id                         Int                          @id @default(autoincrement())
+  id_producto                Int
+  sku                        String                       @unique @db.VarChar(50)
+  nombre_variante            String                       @db.VarChar(100)
+  precio_ajuste              Decimal?                     @default(0) @db.Decimal(10, 2)
+  stock                      Int                          @default(0)
+  imagen_url                 String?
+  activo                     Boolean?                     @default(true)
+  created_at                 DateTime?                    @default(now()) @db.Timestamp(6)
+  updated_at                 DateTime?                    @default(now()) @db.Timestamp(6)
+  cat_imagenes_producto      cat_imagenes_producto[]
+  cat_productos              cat_productos                @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  cat_variante_atributo      cat_variante_atributo[]
+  cli_items_lista_deseos     cli_items_lista_deseos[]
+  cli_resenas_producto       cli_resenas_producto[]
+  inv_detalle_ajuste         inv_detalle_ajuste[]
+  inv_detalle_orden_compra   inv_detalle_orden_compra[]
+  inv_movimientos_inventario inv_movimientos_inventario[]
+  inv_reservas_stock         inv_reservas_stock[]
+  inv_stock_producto         inv_stock_producto[]
+  ord_items_carrito          ord_items_carrito[]
+  ord_items_orden            ord_items_orden[]
+  seg_eventos_tracking       seg_eventos_tracking[]
+
+  @@index([id_producto], map: "idx_variante_producto")
+  @@index([sku], map: "idx_variante_sku")
+}
+
+model cat_valores_atributo {
+  id                    Int                     @id @default(autoincrement())
+  id_atributo           Int
+  valor                 String                  @db.VarChar(255)
+  cat_atributos         cat_atributos           @relation(fields: [id_atributo], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  cat_variante_atributo cat_variante_atributo[]
+
+  @@unique([id_atributo, valor])
+}
+
+model cat_variante_atributo {
+  id                    Int                   @id @default(autoincrement())
+  id_variante           Int
+  id_valor_atributo     Int
+  cat_valores_atributo  cat_valores_atributo  @relation(fields: [id_valor_atributo], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  cat_producto_variante cat_producto_variante @relation(fields: [id_variante], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([id_variante, id_valor_atributo])
+}
+
+model cli_historial_navegacion {
+  id            Int           @id @default(autoincrement())
+  id_cliente    Int
+  id_producto   Int
+  fecha_visita  DateTime?     @default(now()) @db.Timestamp(6)
+  cli_clientes  cli_clientes  @relation(fields: [id_cliente], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  cat_productos cat_productos @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([id_cliente], map: "idx_historial_cliente")
+}
+
+model cli_items_lista_deseos {
+  id                    Int                    @id @default(autoincrement())
+  id_lista_deseos       Int
+  id_producto           Int
+  id_variante           Int?
+  agregado              DateTime?              @default(now()) @db.Timestamp(6)
+  cli_lista_deseos      cli_lista_deseos       @relation(fields: [id_lista_deseos], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  cat_productos         cat_productos          @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  cat_producto_variante cat_producto_variante? @relation(fields: [id_variante], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([id_lista_deseos, id_producto, id_variante])
+}
+
+model configuracion_sistema {
+  id          Int     @id @default(autoincrement())
+  clave       String  @unique @db.VarChar(100)
+  valor       String
+  descripcion String?
+}
+
+model inv_ajustes {
+  id                 Int                  @id @default(autoincrement())
+  motivo             String
+  fecha              DateTime?            @default(now()) @db.Timestamp(6)
+  inv_detalle_ajuste inv_detalle_ajuste[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inv_detalle_ajuste {
+  id                    Int                    @id @default(autoincrement())
+  id_ajuste             Int
+  id_producto           Int?
+  id_variante           Int?
+  cantidad              Int
+  inv_ajustes           inv_ajustes            @relation(fields: [id_ajuste], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  cat_productos         cat_productos?         @relation(fields: [id_producto], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cat_producto_variante cat_producto_variante? @relation(fields: [id_variante], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inv_detalle_orden_compra {
+  id                    Int                    @id @default(autoincrement())
+  id_orden_compra       Int
+  id_producto           Int?
+  id_variante           Int?
+  cantidad              Int
+  costo_unitario        Decimal                @db.Decimal(10, 2)
+  inv_ordenes_compra    inv_ordenes_compra     @relation(fields: [id_orden_compra], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  producto              cat_productos?         @relation(fields: [id_producto], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variante              cat_producto_variante? @relation(fields: [id_variante], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model inv_recepciones {
+  id                 Int                @id @default(autoincrement())
+  id_orden_compra    Int
+  fecha              DateTime?          @default(now()) @db.Timestamp(6)
+  estado             String?            @default("recibido") @db.VarChar(20)
+  inv_ordenes_compra inv_ordenes_compra @relation(fields: [id_orden_compra], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inv_reservas_stock {
+  id                    Int                    @id @default(autoincrement())
+  id_producto           Int?
+  id_variante           Int?
+  id_almacen            Int
+  cantidad              Int
+  session_id            String                 @db.VarChar(255)
+  fecha_expiracion      DateTime               @default(dbgenerated("(now() + '00:15:00'::interval)")) @db.Timestamp(6)
+  created_at            DateTime?              @default(now()) @db.Timestamp(6)
+  inv_almacenes         inv_almacenes          @relation(fields: [id_almacen], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cat_productos         cat_productos?         @relation(fields: [id_producto], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  cat_producto_variante cat_producto_variante? @relation(fields: [id_variante], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([fecha_expiracion], map: "idx_reservas_expiracion")
+  @@index([session_id], map: "idx_reservas_session")
+}
+
+model monedas {
+  id                                                 Int           @id @default(autoincrement())
+  codigo                                             String        @unique @db.VarChar(3)
+  simbolo                                            String        @db.VarChar(5)
+  nombre                                             String?       @db.VarChar(50)
+  tipo_cambio_tipo_cambio_id_moneda_destinoTomonedas tipo_cambio[] @relation("tipo_cambio_id_moneda_destinoTomonedas")
+  tipo_cambio_tipo_cambio_id_moneda_origenTomonedas  tipo_cambio[] @relation("tipo_cambio_id_moneda_origenTomonedas")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ord_devolucion_items {
+  id                Int              @id @default(autoincrement())
+  id_devolucion     Int
+  id_item_orden     Int
+  cantidad_devuelta Int
+  devolucion        ord_devoluciones @relation(fields: [id_devolucion], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  item_orden        ord_items_orden  @relation(fields: [id_item_orden], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ord_devoluciones {
+  id                       Int                    @id @default(autoincrement())
+  id_orden                 Int
+  motivo                   String
+  estado                   String?                @default("solicitada") @db.VarChar(20)
+  monto_reembolsado        Decimal?               @db.Decimal(12, 2)
+  fecha_solicitud          DateTime?              @default(now()) @db.Timestamp(6)
+  fecha_resolucion         DateTime?              @db.Timestamp(6)
+  comentario_administrador String?
+  items                    ord_devolucion_items[]
+  orden                    ord_ordenes            @relation(fields: [id_orden], references: [id], onUpdate: NoAction)
+
+  @@index([id_orden], map: "idx_devoluciones_orden")
+}
+
+model ord_historial_estados {
+  id                Int               @id @default(autoincrement())
+  id_orden          Int
+  id_estado         Int
+  fecha             DateTime?         @default(now()) @db.Timestamp(6)
+  comentario        String?
+  id_usuario        Int?
+  ord_estados_orden ord_estados_orden @relation(fields: [id_estado], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ord_ordenes       ord_ordenes       @relation(fields: [id_orden], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([id_orden], map: "idx_historial_orden")
+}
+
+model ord_metodos_pago {
+  id          Int           @id @default(autoincrement())
+  nombre      String        @unique @db.VarChar(50)
+  activo      Boolean?      @default(true)
+  ord_ordenes ord_ordenes[]
+  ord_pagos   ord_pagos[]
+}
+
+model ord_transacciones_pago {
+  id        Int       @id @default(autoincrement())
+  id_pago   Int
+  respuesta Json?
+  fecha     DateTime? @default(now()) @db.Timestamp(6)
+  ord_pagos ord_pagos @relation(fields: [id_pago], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model seg_eventos_tracking {
+  id                    Int                    @id @default(autoincrement())
+  id_cliente            Int?
+  session_id            String                 @db.VarChar(255)
+  tipo_evento           String                 @db.VarChar(50)
+  pagina                String?                @db.VarChar(255)
+  id_producto           Int?
+  id_variante           Int?
+  datos_extra           Json?
+  ip_origen             String?                @db.Inet
+  user_agent            String?
+  fecha                 DateTime?              @default(now()) @db.Timestamp(6)
+  cli_clientes          cli_clientes?          @relation(fields: [id_cliente], references: [id], onUpdate: NoAction)
+  cat_productos         cat_productos?         @relation(fields: [id_producto], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cat_producto_variante cat_producto_variante? @relation(fields: [id_variante], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([id_cliente], map: "idx_eventos_cliente")
+  @@index([fecha], map: "idx_eventos_fecha")
+  @@index([session_id], map: "idx_eventos_session")
+  @@index([tipo_evento], map: "idx_eventos_tipo")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model seg_tokens {
+  id           Int          @id @default(autoincrement())
+  id_usuario   Int
+  token        String       @unique @db.VarChar(255)
+  tipo         String       @db.VarChar(20)
+  expiracion   DateTime     @db.Timestamp(6)
+  usado        Boolean?     @default(false)
+  created_at   DateTime?    @default(now()) @db.Timestamp(6)
+  seg_usuarios seg_usuarios @relation(fields: [id_usuario], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([token], map: "idx_tokens_token")
+  @@index([id_usuario], map: "idx_tokens_usuario")
+}
+
+model tipo_cambio {
+  id                                             Int      @id @default(autoincrement())
+  id_moneda_origen                               Int
+  id_moneda_destino                              Int
+  tasa                                           Decimal  @db.Decimal(12, 6)
+  fecha                                          DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
+  monedas_tipo_cambio_id_moneda_destinoTomonedas monedas  @relation("tipo_cambio_id_moneda_destinoTomonedas", fields: [id_moneda_destino], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monedas_tipo_cambio_id_moneda_origenTomonedas  monedas  @relation("tipo_cambio_id_moneda_origenTomonedas", fields: [id_moneda_origen], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([id_moneda_origen, id_moneda_destino, fecha])
+}
