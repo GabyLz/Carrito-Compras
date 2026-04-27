@@ -44,7 +44,7 @@ const Home = () => {
             <p className="mb-3 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.22em] text-sky-100">
               Plataforma E-commerce
             </p>
-            <h1 className="mb-4 text-4xl font-black tracking-tight text-white md:text-5xl">Compra facil con control profesional</h1>
+            <h1 className="mb-4 text-4xl font-black tracking-tight text-white md:text-5xl">{heroTitle}</h1>
             <p className="mb-6 max-w-xl text-[15px] leading-relaxed text-slate-200/90">
               {heroDescription}
             </p>

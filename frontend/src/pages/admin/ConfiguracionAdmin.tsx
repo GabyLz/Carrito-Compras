@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import api from '../../services/api';
@@ -26,17 +26,21 @@ const ConfiguracionAdmin = () => {
 
   const [isSaving, setIsSaving] = useState(false);
 
-  useQuery({
+  const configQuery = useQuery({
     queryKey: ['admin-config-compra'],
     queryFn: async () => (await api.get('/configuracion/admin')).data,
-    onSuccess: (data) => {
-      setConfig((prev) => ({
-        ...prev,
-        impuesto_porcentaje: Number(data?.impuesto_porcentaje ?? prev.impuesto_porcentaje),
-        envio_gratis_desde: Number(data?.envio_gratis_desde ?? prev.envio_gratis_desde),
-      }));
-    },
   });
+
+  useEffect(() => {
+    const data = configQuery.data as { impuesto_porcentaje?: number; envio_gratis_desde?: number } | undefined;
+    if (!data) return;
+
+    setConfig((prev) => ({
+      ...prev,
+      impuesto_porcentaje: Number(data.impuesto_porcentaje ?? prev.impuesto_porcentaje),
+      envio_gratis_desde: Number(data.envio_gratis_desde ?? prev.envio_gratis_desde),
+    }));
+  }, [configQuery.data]);
 
   const saveConfigMutation = useMutation({
     mutationFn: async (payload: { impuesto_porcentaje: number; envio_gratis_desde: number }) =>
