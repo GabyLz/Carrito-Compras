@@ -81,7 +81,15 @@ const Carrito = () => {
     }
     try {
       const codigo = cupon.trim().toUpperCase();
-      await api.post('/carrito/aplicar-cupon', { codigo });
+      const response = await api.get('/carrito/resumen', {
+        params: { cupon: codigo },
+      });
+      const resumenAplicado = response.data;
+
+      if (!resumenAplicado?.cupon) {
+        throw new Error('Cupon invalido o no aplicable');
+      }
+
       queryClient.invalidateQueries({ queryKey: ['carrito-resumen'] });
       setCoupon(codigo);
       toast.success('Cupon aplicado');
