@@ -7,6 +7,8 @@ import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
 
 const ProductoDetalle = () => {
+  const placeholderImage =
+    'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"%3E%3Crect width="400" height="400" fill="%23e2e8f0"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%2364748b" font-family="Arial, sans-serif" font-size="24"%3EProducto%3C/text%3E%3C/svg%3E';
   const { id } = useParams();
   const queryClient = useQueryClient();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -60,7 +62,7 @@ const ProductoDetalle = () => {
   if (isLoading) return <div className="app-shell py-10 text-center text-slate-600">Cargando detalle de producto...</div>;
   if (!producto) return <div className="app-shell py-10 text-center text-slate-600">Producto no encontrado</div>;
 
-  const gallery = producto.imagenes?.length ? producto.imagenes : [{ url: 'https://via.placeholder.com/400' }];
+  const gallery = producto.imagenes?.length ? producto.imagenes : [{ url: placeholderImage }];
   const activeImage = selectedImage || gallery[0]?.url;
   const selectedVariant = producto.variantes?.find((variant: any) => variant.id === selectedVariantId) || null;
   const totalStock = Number(selectedVariant?.stock ?? producto.stock_general ?? 0);
@@ -91,7 +93,7 @@ const ProductoDetalle = () => {
       <div className="panel flex flex-col gap-8 p-6 md:flex-row">
         <div className="md:w-1/2">
           <img 
-            src={activeImage || 'https://via.placeholder.com/400'} 
+            src={activeImage || placeholderImage} 
             alt={producto.nombre} 
             className="w-full rounded-lg border border-slate-200 object-cover shadow-sm transition-transform duration-200 hover:scale-[1.02]"
           />

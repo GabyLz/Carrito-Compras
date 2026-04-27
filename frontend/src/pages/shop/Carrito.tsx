@@ -7,6 +7,8 @@ import api from '../../services/api';
 import { toast } from 'react-hot-toast';
 
 const Carrito = () => {
+  const placeholderImage =
+    'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23e2e8f0"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%2364748b" font-family="Arial, sans-serif" font-size="12"%3EProducto%3C/text%3E%3C/svg%3E';
   const queryClient = useQueryClient();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { items, removeItem, updateQuantity, clearCart, hasHydrated, coupon, setCoupon } = useCartStore();
@@ -188,7 +190,7 @@ const Carrito = () => {
               {items.map((item) => (
                 <article key={`${item.id_producto}-${item.id_variante || 0}`} className="grid gap-4 p-4 md:grid-cols-[88px_1fr_auto] md:items-center">
                   <img
-                    src={item.imagen || 'https://via.placeholder.com/100x100?text=Producto'}
+                    src={item.imagen || placeholderImage}
                     alt={item.nombre}
                     className="h-20 w-20 rounded-lg border border-slate-200 object-cover"
                   />
