@@ -10,7 +10,9 @@ const OrdenesAdmin = () => {
   const [cliente, setCliente] = useState('');
   const [montoMin, setMontoMin] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
-  const [nextEstado, setNextEstado] = useState<string>('en_proceso');
+  const [nextEstado, setNextEstado] = useState<string>('pagado');
+
+  const estadosOrden = ['pendiente', 'pagado', 'enviado', 'entregado', 'cancelado', 'devuelto'];
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -107,7 +109,7 @@ const OrdenesAdmin = () => {
                         key={o.id}
                         onClick={() => {
                           setSelectedOrderId(o.id);
-                          setNextEstado(o.estado?.nombre || 'en_proceso');
+                          setNextEstado(o.estado?.nombre || 'pagado');
                         }}
                         className={`cursor-pointer transition-colors hover:bg-slate-50/70 ${isSelected ? 'bg-sky-50/70' : ''}`}
                       >
@@ -187,7 +189,7 @@ const OrdenesAdmin = () => {
                 <p className="text-sm font-bold text-slate-900">Cambiar estado</p>
                 <div className="mt-3 grid gap-2">
                   <select value={nextEstado} onChange={(e) => setNextEstado(e.target.value)} className="w-full rounded-xl border-slate-200 text-sm focus:border-sky-500 focus:ring-sky-500">
-                    {['pendiente_pago', 'pagada', 'en_proceso', 'enviada', 'entregada', 'cancelada', 'devuelta'].map((e) => (
+                    {estadosOrden.map((e) => (
                       <option key={e} value={e}>{e}</option>
                     ))}
                   </select>

@@ -574,15 +574,24 @@ export class OrdenController {
     if (id_estado) {
       estadoEntity = await prisma.ord_estados_orden.findUnique({ where: { id: Number(id_estado) } });
     } else if (estado) {
-      estadoEntity = await prisma.ord_estados_orden.findFirst({ where: { nombre: estado } });
+      const estadoNormalizado = String(estado).trim().toLowerCase();
+      const aliasEstado: Record<string, string> = {
+        en_proceso: 'pagado',
+        pagada: 'pagado',
+        pendiente_pago: 'pendiente',
+        cancelado: 'cancelado',
+        cancelada: 'cancelado',
+      };
+      const estadoBuscado = aliasEstado[estadoNormalizado] || estadoNormalizado;
+      estadoEntity = await prisma.ord_estados_orden.findFirst({ where: { nombre: estadoBuscado } });
     }
 
     if (!estadoEntity) return res.status(400).json({ error: 'Estado invalido' });
 
     if (role === 'VENDEDOR') {
-      const allowedBasicStates = ['en_proceso', 'enviada'];
+      const allowedBasicStates = ['pagado', 'enviado'];
       if (!allowedBasicStates.includes((estadoEntity.nombre || '').toLowerCase())) {
-        return res.status(403).json({ error: 'Vendedor solo puede cambiar a en_proceso o enviada' });
+        return res.status(403).json({ error: 'Vendedor solo puede cambiar a pagado o enviado' });
       }
     }
 
