@@ -41,6 +41,22 @@ const Carrito = () => {
   const descuento = isAuthenticated ? Number(resumen?.descuento || 0) : 0;
   const total = isAuthenticated ? Number(resumen?.total || 0) : totalLocal;
 
+  const getAvailableStock = (item: (typeof items)[number]) => {
+    const remoteItem = resumen?.items?.find(
+      (it: any) => it.id_producto === item.id_producto && (it.id_variante || undefined) === item.id_variante
+    );
+    const remoteStock = Number(remoteItem?.variante?.stock ?? remoteItem?.producto?.stock_general ?? 0);
+    const localStock = Number(item.stock ?? 0);
+    return remoteStock > 0 ? remoteStock : localStock;
+  };
+
+  const isOverStock = (item: (typeof items)[number]) => {
+    const stockDisponible = getAvailableStock(item);
+    return stockDisponible > 0 && item.cantidad > stockDisponible;
+  };
+
+  const hasStockWarnings = items.some(isOverStock);
+
   const syncMutation = useMutation({
     mutationFn: async () => api.post('/carrito/sync-local', { items }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['carrito-resumen'] }),
@@ -99,8 +115,14 @@ const Carrito = () => {
     }
   };
 
-  const onChangeQty = (idProducto: number, qty: number, idVariante?: number) => {
-    updateQuantity(idProducto, Math.max(1, qty), idVariante);
+  const onChangeQty = (idProducto: number, qty: number, idVariante?: number, stockDisponible?: number) => {
+    const safeQty = Math.max(1, qty);
+    if (typeof stockDisponible === 'number' && stockDisponible > 0 && safeQty > stockDisponible) {
+      toast.error(`Solo hay ${stockDisponible} unidad(es) disponibles.`);
+      return;
+    }
+
+    updateQuantity(idProducto, safeQty, idVariante);
     if (isAuthenticated) {
       syncMutation.mutate();
     }
@@ -158,6 +180,11 @@ const Carrito = () => {
                   ))}
                 </div>
               )}
+              {hasStockWarnings && (
+                <div className="bg-rose-50 p-4 text-sm text-rose-700">
+                  Hay productos que superan el stock disponible. Reduce la cantidad para poder continuar.
+                </div>
+              )}
               {items.map((item) => (
                 <article key={`${item.id_producto}-${item.id_variante || 0}`} className="grid gap-4 p-4 md:grid-cols-[88px_1fr_auto] md:items-center">
                   <img
@@ -172,9 +199,13 @@ const Carrito = () => {
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <div className="flex items-center gap-2 rounded-lg border border-slate-300 px-2 py-1">
+                      {(() => {
+                        const stockDisponible = getAvailableStock(item);
+                        return (
+                          <>
                       <button
                         type="button"
-                        onClick={() => onChangeQty(item.id_producto, Math.max(1, item.cantidad - 1), item.id_variante)}
+                        onClick={() => onChangeQty(item.id_producto, Math.max(1, item.cantidad - 1), item.id_variante, stockDisponible)}
                         className="rounded px-2 py-1 text-slate-700 hover:bg-slate-100"
                       >
                         -
@@ -182,12 +213,19 @@ const Carrito = () => {
                       <span className="w-7 text-center text-sm font-semibold">{item.cantidad}</span>
                       <button
                         type="button"
-                        onClick={() => onChangeQty(item.id_producto, item.cantidad + 1, item.id_variante)}
-                        className="rounded px-2 py-1 text-slate-700 hover:bg-slate-100"
+                        onClick={() => onChangeQty(item.id_producto, item.cantidad + 1, item.id_variante, stockDisponible)}
+                        disabled={stockDisponible > 0 && item.cantidad >= stockDisponible}
+                        className="rounded px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         +
                       </button>
+                          </>
+                        );
+                      })()}
                     </div>
+                    <p className={`text-xs ${isOverStock(item) ? 'text-rose-700' : 'text-slate-500'}`}>
+                      Disponible: {getAvailableStock(item) > 0 ? getAvailableStock(item) : 'sin limite visible'}
+                    </p>
                     <button
                       type="button"
                       onClick={() => onRemove(item.id_producto, item.id_variante)}

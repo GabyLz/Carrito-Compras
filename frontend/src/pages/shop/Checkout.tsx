@@ -95,10 +95,28 @@ export default function CheckoutPage() {
   const impuestoMostrar = Number(resumen?.impuesto ?? 0);
   const envioMostrar = Number(resumen?.envio ?? 0);
   const baseImponibleMostrar = Number(Math.max(subtotalMostrar - descuentoMostrar, 0).toFixed(2));
+  const getAvailableStock = (item: (typeof items)[number]) => {
+    const remoteItem = resumen?.items?.find(
+      (it: any) => it.id_producto === item.id_producto && (it.id_variante || undefined) === item.id_variante
+    );
+    const remoteStock = Number(remoteItem?.variante?.stock ?? remoteItem?.producto?.stock_general ?? 0);
+    const localStock = Number(item.stock ?? 0);
+    return remoteStock > 0 ? remoteStock : localStock;
+  };
+  const stockViolations = items.filter((item) => {
+    const stockDisponible = getAvailableStock(item);
+    return stockDisponible > 0 && item.cantidad > stockDisponible;
+  });
+  const hasStockViolations = stockViolations.length > 0;
 
   const steps = ['Login', 'Direccion', 'Envio', 'Pago', 'Revision'];
 
   const nextStep = async () => {
+    if (hasStockViolations) {
+      toast.error('Hay productos con stock insuficiente. Ajusta el carrito antes de seguir.');
+      return;
+    }
+
     if (step === 1) {
       if (!user) {
         toast.error('Debes iniciar sesion para continuar con la compra.');
@@ -271,6 +289,11 @@ export default function CheckoutPage() {
         {step === 5 && (
           <div className="mt-5 space-y-3">
             <h3 className="text-lg font-bold text-slate-900">Revision final</h3>
+            {hasStockViolations && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                No puedes confirmar el pedido mientras haya productos por encima del stock disponible.
+              </div>
+            )}
             <ul className="space-y-2 text-sm text-slate-700">
               {items.map((i) => (
                 <li key={`${i.id_producto}-${i.id_variante || 0}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
@@ -318,7 +341,7 @@ export default function CheckoutPage() {
           ) : (
             <button
               onClick={() => crearOrden()}
-              disabled={isPending || !direccionId}
+              disabled={isPending || !direccionId || hasStockViolations}
               className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isPending ? 'Procesando...' : 'Confirmar pedido'}

@@ -71,6 +71,25 @@ export class OrdenController {
     return prisma.ord_estados_orden.findFirst({ where: { nombre } });
   }
 
+  private async resolveStockDisponible(idProducto: number, idVariante?: number | null) {
+    const producto = await prisma.cat_productos.findUnique({
+      where: { id: idProducto },
+      include: { variantes: true },
+    });
+
+    if (!producto) return null;
+
+    const variante = typeof idVariante === 'number'
+      ? producto.variantes.find((item) => item.id === idVariante)
+      : null;
+
+    return {
+      producto,
+      variante,
+      stockDisponible: Number(variante?.stock ?? producto.stock_general ?? 0),
+    };
+  }
+
   private async pushHistorial(idOrden: number, idEstado: number, idUsuario?: number, comentario?: string) {
     await prisma.ord_historial_estados.create({
       data: {
@@ -97,6 +116,15 @@ export class OrdenController {
 
     if (!carrito || carrito.items.length === 0) {
       return res.status(400).json({ error: 'Carrito vacio' });
+    }
+
+    for (const item of carrito.items) {
+      const stockDisponible = Number(item.variante?.stock ?? item.producto.stock_general ?? 0);
+      if (item.cantidad > stockDisponible) {
+        return res.status(400).json({
+          error: `Stock insuficiente para ${item.producto.nombre}. Disponible: ${Math.max(stockDisponible, 0)}`,
+        });
+      }
     }
 
     const metodoEnvioIdNum = typeof metodoEnvioId === 'number' ? metodoEnvioId : Number(metodoEnvioId);
@@ -211,6 +239,7 @@ export class OrdenController {
     await prisma.inv_reservas_stock.deleteMany({ where: { session_id: sessionId } });
 
     for (const item of carrito.items) {
+      const stockDisponible = Number(item.variante?.stock ?? item.producto.stock_general ?? 0);
       const reservadas = await prisma.inv_reservas_stock.aggregate({
         _sum: { cantidad: true },
         where: {
@@ -221,7 +250,7 @@ export class OrdenController {
       });
 
       const cantidadReservada = Number(reservadas._sum.cantidad || 0);
-      const disponible = item.producto.stock_general - cantidadReservada;
+      const disponible = stockDisponible - cantidadReservada;
       if (disponible < item.cantidad) {
         return res.status(400).json({
           error: `Stock insuficiente para ${item.producto.nombre}. Disponible: ${Math.max(disponible, 0)}`,

@@ -62,19 +62,26 @@ const ProductoDetalle = () => {
 
   const gallery = producto.imagenes?.length ? producto.imagenes : [{ url: 'https://via.placeholder.com/400' }];
   const activeImage = selectedImage || gallery[0]?.url;
-  const totalStock = Number(producto.stock_general || 0);
+  const selectedVariant = producto.variantes?.find((variant: any) => variant.id === selectedVariantId) || null;
+  const totalStock = Number(selectedVariant?.stock ?? producto.stock_general ?? 0);
   const price = Number(producto.precio_venta || 0);
   const offerPrice = producto.precio_oferta ? Number(producto.precio_oferta) : null;
   const hasStock = totalStock > 0;
 
   const handleAddToCart = () => {
+    if (!hasStock) {
+      toast.error('Este producto no tiene stock disponible.');
+      return;
+    }
+
     addItem({
       id_producto: producto.id,
       nombre: producto.nombre,
       precio: offerPrice || price,
       cantidad: 1,
       id_variante: selectedVariantId || undefined,
-      imagen: activeImage || ''
+      imagen: activeImage || '',
+      stock: totalStock,
     });
     toast.success('Producto añadido al carrito');
   };
@@ -138,7 +145,7 @@ const ProductoDetalle = () => {
                       selectedVariantId === v.id ? 'border-sky-700 bg-sky-50' : 'border-slate-300'
                     }`}
                   >
-                    {v.nombre_variante}
+                    {v.nombre_variante} ({Number(v.stock ?? 0) > 0 ? `stock ${Number(v.stock)}` : 'sin stock'})
                   </button>
                 ))}
               </div>
@@ -147,6 +154,7 @@ const ProductoDetalle = () => {
 
           <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
             Stock disponible en tiempo real: <span className={`font-bold ${hasStock ? 'text-emerald-700' : 'text-rose-700'}`}>{totalStock}</span>
+            {selectedVariant && <span className="ml-2 text-xs text-slate-500">Variante seleccionada: {selectedVariant.nombre_variante}</span>}
           </div>
 
           <button

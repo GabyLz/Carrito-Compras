@@ -27,6 +27,7 @@ export class CalculoService {
     for (const item of items) {
       const p = item.producto;
       let precioActual = Number(p.precio_venta);
+      const stockDisponible = Number(item.variante?.stock ?? p.stock_general ?? 0);
 
       // 1. Lógica de Oferta Activa
       if (p.precio_oferta && p.fecha_inicio_oferta && p.fecha_fin_oferta) {
@@ -47,11 +48,11 @@ export class CalculoService {
       subtotal += subtotalItem;
 
       // Alertas de stock
-      if (item.cantidad > p.stock_general) {
+      if (item.cantidad > stockDisponible) {
         alerts.push({
           id_item: item.id,
           tipo: 'stock',
-          mensaje: `${item.producto.nombre}: stock insuficiente (${item.producto.stock_general} disponible).`,
+          mensaje: `${item.producto.nombre}: stock insuficiente (${stockDisponible} disponible).`,
         });
       }
     }

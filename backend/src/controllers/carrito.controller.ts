@@ -7,6 +7,45 @@ export class CarritoController {
     return prisma.cli_clientes.findFirst({ where: { usuario: { id: userId } } });
   }
 
+  private async resolveStockDisponible(idProducto: number, idVariante?: number | null) {
+    const producto = await prisma.cat_productos.findUnique({
+      where: { id: idProducto },
+      include: { variantes: true },
+    });
+
+    if (!producto) return null;
+
+    const variante = typeof idVariante === 'number'
+      ? producto.variantes.find((item) => item.id === idVariante)
+      : null;
+
+    return {
+      producto,
+      variante,
+      stockDisponible: Number(variante?.stock ?? producto.stock_general ?? 0),
+    };
+  }
+
+  private async validarCantidadDisponible(idProducto: number, cantidad: number, idVariante?: number | null) {
+    const stock = await this.resolveStockDisponible(idProducto, idVariante);
+    if (!stock) return { ok: false, status: 404, error: 'Producto no encontrado' };
+
+    const stockDisponible = Math.max(Number(stock.stockDisponible || 0), 0);
+    if (stockDisponible <= 0) {
+      return { ok: false, status: 400, error: `${stock.producto.nombre} no tiene stock disponible.` };
+    }
+
+    if (cantidad > stockDisponible) {
+      return {
+        ok: false,
+        status: 400,
+        error: `${stock.producto.nombre}: solo hay ${stockDisponible} unidad(es) disponibles.`,
+      };
+    }
+
+    return { ok: true, stockDisponible };
+  }
+
   private async resolveCarritoByUser(userId: number) {
     const cliente = await this.resolveCliente(userId);
     if (!cliente) return null;
@@ -53,11 +92,13 @@ export class CarritoController {
       const precioActual = Number(item.producto.precio_venta);
       subtotal += precioActual * item.cantidad;
 
-      if (item.cantidad > item.producto.stock_general) {
+      const stockDisponible = Number(item.variante?.stock ?? item.producto.stock_general ?? 0);
+
+      if (item.cantidad > stockDisponible) {
         alerts.push({
           id_item: item.id,
           tipo: 'stock',
-          mensaje: `${item.producto.nombre}: stock insuficiente (${item.producto.stock_general} disponible).`,
+          mensaje: `${item.producto.nombre}: stock insuficiente (${stockDisponible} disponible).`,
         });
       }
 
@@ -142,25 +183,34 @@ export class CarritoController {
 
   async addItem(req: AuthRequest, res: Response) {
     const userId = req.user!.id;
-    const { id_producto, cantidad, id_variante } = req.body;
+    const idProducto = Number(req.body?.id_producto);
+    const cantidad = Math.max(Number(req.body?.cantidad || 1), 1);
+    const idVariante = req.body?.id_variante !== undefined && req.body?.id_variante !== null ? Number(req.body.id_variante) : null;
     const cliente = await this.resolveCliente(userId);
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
+
+    const stockValido = await this.validarCantidadDisponible(idProducto, cantidad, idVariante);
+    if (!stockValido.ok) return res.status(stockValido.status).json({ error: stockValido.error });
 
     let carrito = await prisma.ord_carritos.findUnique({ where: { id_cliente: cliente.id } });
     if (!carrito) {
       carrito = await prisma.ord_carritos.create({ data: { id_cliente: cliente.id } });
     }
     const existing = await prisma.ord_items_carrito.findFirst({
-      where: { id_carrito: carrito.id, id_producto, id_variante: id_variante || null }
+      where: { id_carrito: carrito.id, id_producto: idProducto, id_variante: idVariante }
     });
+    const cantidadFinal = existing ? existing.cantidad + cantidad : cantidad;
+    if (cantidadFinal > Number(stockValido.stockDisponible || 0)) {
+      return res.status(400).json({ error: `Solo hay ${stockValido.stockDisponible} unidad(es) disponibles.` });
+    }
     if (existing) {
       await prisma.ord_items_carrito.update({
         where: { id: existing.id },
-        data: { cantidad: Math.max(existing.cantidad + cantidad, 1) }
+        data: { cantidad: cantidadFinal }
       });
     } else {
       await prisma.ord_items_carrito.create({
-        data: { id_carrito: carrito.id, id_producto, id_variante: id_variante || null, cantidad: Math.max(cantidad, 1) }
+        data: { id_carrito: carrito.id, id_producto: idProducto, id_variante: idVariante, cantidad }
       });
     }
     res.json({ message: 'Producto agregado al carrito' });
@@ -168,7 +218,7 @@ export class CarritoController {
 
   async updateItem(req: AuthRequest, res: Response) {
     const { itemId } = req.params;
-    const { cantidad } = req.body;
+    const cantidad = Math.max(Number(req.body?.cantidad || 1), 1);
     const userId = req.user!.id;
     const carrito = await this.resolveCarritoByUser(userId);
     if (!carrito) return res.status(404).json({ error: 'Carrito no encontrado' });
@@ -178,9 +228,12 @@ export class CarritoController {
       return res.status(403).json({ error: 'No autorizado para modificar este item' });
     }
 
+    const stockValido = await this.validarCantidadDisponible(item.id_producto, cantidad, item.id_variante);
+    if (!stockValido.ok) return res.status(stockValido.status).json({ error: stockValido.error });
+
     await prisma.ord_items_carrito.update({
       where: { id: parseInt(itemId) },
-      data: { cantidad: Math.max(Number(cantidad || 1), 1) }
+      data: { cantidad }
     });
     res.json({ message: 'Cantidad actualizada' });
   }
@@ -220,11 +273,16 @@ export class CarritoController {
 
     for (const it of localItems) {
       const cantidad = Math.max(Number(it.cantidad || 1), 1);
+      const idProducto = Number(it.id_producto);
+      const idVariante = it.id_variante !== undefined && it.id_variante !== null ? Number(it.id_variante) : null;
+      const stockValido = await this.validarCantidadDisponible(idProducto, cantidad, idVariante);
+      if (!stockValido.ok) return res.status(stockValido.status).json({ error: stockValido.error });
+
       const existing = await prisma.ord_items_carrito.findFirst({
         where: {
           id_carrito: carrito.id,
-          id_producto: Number(it.id_producto),
-          id_variante: it.id_variante ? Number(it.id_variante) : null,
+          id_producto: idProducto,
+          id_variante: idVariante,
         },
       });
 
@@ -237,8 +295,8 @@ export class CarritoController {
         await prisma.ord_items_carrito.create({
           data: {
             id_carrito: carrito.id,
-            id_producto: Number(it.id_producto),
-            id_variante: it.id_variante ? Number(it.id_variante) : null,
+            id_producto: idProducto,
+            id_variante: idVariante,
             cantidad,
           },
         });
