@@ -37,12 +37,13 @@ const Reportes = () => {
         throw new Error(errorData.detail || errorData.message || 'No se pudo generar el PDF');
       }
 
-      const blob = await response.blob();
-      if (blob.type === 'application/json') {
-        const text = await blob.text();
-        const error = JSON.parse(text);
-        throw new Error(error.detail || error.message || 'Error en el servidor');
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/pdf')) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || 'El servidor no devolvió un PDF válido');
       }
+
+      const blob = await response.blob();
 
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -51,7 +52,7 @@ const Reportes = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
     } catch (error: any) {
       console.error('Error al descargar PDF:', error);
       alert(`Error: ${error.message}`);
