@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import PDFDocument from 'pdfkit';
 import prisma from '../lib/prisma';
 
 const safeText = (value: unknown) =>
@@ -62,6 +63,26 @@ const getBrowserLaunchOptions = async () => {
   };
 };
 
+const sendFallbackPdf = (res: Response, filename: string, title: string, lines: string[]) => {
+  const doc = new PDFDocument({ margin: 40, size: 'A4' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+  doc.pipe(res);
+
+  doc.rect(0, 0, doc.page.width, 72).fill('#0f172a');
+  doc.fillColor('#ffffff').fontSize(20).text('Commerce Suite', 40, 24);
+  doc.fillColor('#0f172a').fontSize(16).text(title, 40, 96);
+  doc.moveDown(1);
+
+  lines.forEach((line) => {
+    doc.fontSize(10).fillColor('#334155').text(line, { lineGap: 4 });
+  });
+
+  doc.moveDown(2);
+  doc.fontSize(9).fillColor('#64748b').text(`Generado: ${new Date().toLocaleString()}`);
+  doc.end();
+};
+
 const renderHtmlToPdf = async (res: Response, htmlContent: string, filename: string) => {
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
   try {
@@ -95,12 +116,16 @@ const renderHtmlToPdf = async (res: Response, htmlContent: string, filename: str
     if (browser) {
       await browser.close().catch(() => undefined);
     }
-    res.status(500).json({
-      success: false,
-      message: 'No se pudo generar el reporte de gestión',
-      detail: error?.message || 'Error interno del servidor',
-      stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
-    });
+    sendFallbackPdf(
+      res,
+      filename,
+      'Reporte de gestión',
+      [
+        'La version HTML avanzada no pudo generarse en este entorno.',
+        `Detalle tecnico: ${error?.message || 'Error interno del servidor'}`,
+        'Se genero una version alternativa para mantener la descarga disponible.',
+      ]
+    );
   }
 };
 
